@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import * as cheerio from "cheerio";
+import { getDomain } from "tldts";
 import type {
   RawFindingDto,
   RawScanResponseDto,
@@ -35,6 +36,22 @@ const clamp = (value: number, min = 0, max = 100): number =>
 
 const cleanText = (value: string | undefined | null): string =>
   (value ?? "").replace(/\s+/g, " ").trim();
+
+const isSameSiteDomain = (candidate: URL, base: URL): boolean => {
+  if (candidate.hostname === base.hostname) {
+    return true;
+  }
+
+  const candidateDomain = getDomain(candidate.hostname);
+
+  const baseDomain = getDomain(base.hostname);
+
+  return (
+    candidateDomain !== null &&
+    baseDomain !== null &&
+    candidateDomain === baseDomain
+  );
+};
 
 const extractVisibleText = (html: string): string => {
   const $ = cheerio.load(html);
@@ -249,31 +266,78 @@ function extractMetaPrice($: cheerio.CheerioAPI): PriceData {
     $('[itemprop="priceCurrency"]').first().attr("content") ??
     $('[itemprop="priceCurrency"]').first().text();
 
-  const amount = parsePriceNumber(rawAmount);
+  return {
+    amount: parsePriceNumber(rawAmount),
 
-  const currency = normalizeCurrency(rawCurrency);
+    currency: normalizeCurrency(rawCurrency),
+  };
+}
 
-  if (amount !== null) {
-    return {
-      amount,
-      currency,
-    };
-  }
-
-  const bodySample = cleanText($("body").text()).slice(0, 40_000);
-
-  const symbolMatch = bodySample.match(/([€$£])\s?(\d{1,6}(?:[.,]\d{2})?)/);
-
-  if (!symbolMatch) {
+function extractVisibleProductPrice(
+  visibleText: string,
+  productHeading: string,
+): PriceData {
+  if (!productHeading) {
     return {
       amount: null,
       currency: null,
     };
   }
 
+  const textLower = visibleText.toLowerCase();
+
+  const headingLower = productHeading.toLowerCase();
+
+  const headingIndex = textLower.indexOf(headingLower);
+
+  if (headingIndex < 0) {
+    return {
+      amount: null,
+      currency: null,
+    };
+  }
+
+  /*
+   * Only inspect a small region immediately after
+   * the actual product heading.
+   *
+   * This prevents shipping thresholds, related
+   * products and footer amounts from being mistaken
+   * for the product's own price.
+   */
+  const productRegion = visibleText.slice(
+    headingIndex + productHeading.length,
+
+    headingIndex + productHeading.length + 900,
+  );
+
+  const symbolPrice = productRegion.match(
+    /(?:US|CA|AU|NZ)?\s*([€$£])\s*(\d{1,6}(?:[.,]\d{1,2})?)/i,
+  );
+
+  if (symbolPrice) {
+    return {
+      amount: parsePriceNumber(symbolPrice[2]),
+
+      currency: currencyFromSymbol(symbolPrice[1]),
+    };
+  }
+
+  const codePrice = productRegion.match(
+    /(\d{1,6}(?:[.,]\d{1,2})?)\s*(EUR|USD|GBP)/i,
+  );
+
+  if (codePrice) {
+    return {
+      amount: parsePriceNumber(codePrice[1]),
+
+      currency: normalizeCurrency(codePrice[2]),
+    };
+  }
+
   return {
-    amount: parsePriceNumber(symbolMatch[2]),
-    currency: currencyFromSymbol(symbolMatch[1]),
+    amount: null,
+    currency: null,
   };
 }
 
@@ -339,9 +403,9 @@ function discoverPolicies(
     }
 
     if (
-      url.origin !== baseUrl.origin ||
+      !isSameSiteDomain(url, baseUrl) ||
       (url.protocol !== "http:" && url.protocol !== "https:") ||
-      url.pathname === baseUrl.pathname
+      (url.hostname === baseUrl.hostname && url.pathname === baseUrl.pathname)
     ) {
       return;
     }
@@ -493,6 +557,73 @@ function createSignal(
   };
 }
 
+function extractPaymentMethods(
+  $: cheerio.CheerioAPI,
+  visibleText: string,
+): string[] {
+  const attributeText: string[] = [];
+
+  $("[alt], [aria-label], [title]").each((_index, element) => {
+    const alt = $(element).attr("alt");
+
+    const ariaLabel = $(element).attr("aria-label");
+
+    const title = $(element).attr("title");
+
+    attributeText.push(alt ?? "", ariaLabel ?? "", title ?? "");
+  });
+
+  const searchableText = [visibleText, ...attributeText]
+    .join(" ")
+    .toLowerCase();
+
+  const paymentMethods = [
+    {
+      label: "PayPal",
+      patterns: ["paypal"],
+    },
+    {
+      label: "Visa",
+      patterns: ["visa"],
+    },
+    {
+      label: "Mastercard",
+      patterns: ["mastercard", "master card"],
+    },
+    {
+      label: "American Express",
+
+      patterns: ["american express", "amex"],
+    },
+    {
+      label: "Apple Pay",
+
+      patterns: ["apple pay", "applepay"],
+    },
+    {
+      label: "Google Pay",
+
+      patterns: ["google pay", "googlepay"],
+    },
+    {
+      label: "Klarna",
+
+      patterns: ["klarna"],
+    },
+    {
+      label: "Shop Pay",
+
+      patterns: ["shop pay", "shoppay"],
+    },
+  ];
+
+  return paymentMethods
+    .filter((method) =>
+      method.patterns.some((pattern) => searchableText.includes(pattern)),
+    )
+    .map((method) => method.label);
+}
+
 export async function analyzeUrl(
   inputUrl: string,
 ): Promise<RawScanResponseDto> {
@@ -508,10 +639,19 @@ export async function analyzeUrl(
 
   const metaPrice = extractMetaPrice($);
 
+  const productHeading = cleanText($("h1").first().text());
+
+  const mainText = extractVisibleText(page.html);
+
+  const visibleProductPrice = extractVisibleProductPrice(
+    mainText,
+    productHeading,
+  );
+
   const productName =
     structuredProduct.productName ||
+    productHeading ||
     cleanText($('meta[property="og:title"]').attr("content")) ||
-    cleanText($("h1").first().text()) ||
     cleanText($("title").text()) ||
     "Product or offer";
 
@@ -532,11 +672,9 @@ export async function analyzeUrl(
   const price =
     structuredProduct.price.amount !== null
       ? structuredProduct.price
-      : metaPrice;
-
-  const mainText = extractVisibleText(page.html);
-
-  const lowerMainText = mainText.toLowerCase();
+      : metaPrice.amount !== null
+        ? metaPrice
+        : visibleProductPrice;
 
   const policyCandidates = discoverPolicies($, page.finalUrl);
 
@@ -589,16 +727,7 @@ export async function analyzeUrl(
       mainText,
     );
 
-  const mainstreamPayments = [
-    "paypal",
-    "visa",
-    "mastercard",
-    "american express",
-    "apple pay",
-    "google pay",
-    "klarna",
-    "shop pay",
-  ].filter((method) => lowerMainText.includes(method));
+  const mainstreamPayments = extractPaymentMethods($, mainText);
 
   const hasContactRoute =
     $('a[href^="mailto:"]').length > 0 ||
@@ -929,12 +1058,12 @@ export async function analyzeUrl(
     headline:
       mainstreamPayments.length > 0
         ? "Mainstream payment methods detected"
-        : "Payment protection could not be confirmed from this page",
+        : "Payment methods could not be confirmed from this page",
 
     detail:
       mainstreamPayments.length > 0
         ? `Backstop found references to ${mainstreamPayments
-            .slice(0, 4)
+            .slice(0, 5)
             .join(
               ", ",
             )}. Depending on the provider and transaction, those methods may provide additional dispute routes.`
