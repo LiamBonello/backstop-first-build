@@ -6,6 +6,7 @@ import {
 
 import {
   useEffect,
+  useRef,
   useState,
 } from 'react';
 
@@ -24,6 +25,10 @@ import {
 import {
   HeroScanner,
 } from './components/HeroScanner';
+
+import type {
+  BrowserNotificationPermission,
+} from './components/NotificationCenter';
 
 import {
   ProtectedPurchaseDetail,
@@ -46,6 +51,10 @@ import {
 } from './mappers/scanMapper';
 
 import {
+  notificationService,
+} from './services/notificationService';
+
+import {
   getDashboardMetrics,
   protectionService,
 } from './services/protectionService';
@@ -53,6 +62,10 @@ import {
 import {
   scanService,
 } from './services/scanService';
+
+import type {
+  DeadlineNotification,
+} from './types/notification';
 
 import type {
   ProtectedPurchase,
@@ -66,6 +79,22 @@ type View =
   | 'result'
   | 'dashboard'
   | 'purchase';
+
+const getBrowserNotificationPermission =
+  (): BrowserNotificationPermission => {
+    if (
+      typeof window ===
+        'undefined' ||
+      !(
+        'Notification' in
+        window
+      )
+    ) {
+      return 'unsupported';
+    }
+
+    return Notification.permission;
+  };
 
 export default function App() {
   const [
@@ -93,6 +122,36 @@ export default function App() {
   ] = useState<
     ProtectedPurchase[]
   >([]);
+
+  const [
+    notifications,
+    setNotifications,
+  ] = useState<
+    DeadlineNotification[]
+  >([]);
+
+  const [
+    notificationLeadDays,
+    setNotificationLeadDays,
+  ] = useState(
+    7,
+  );
+
+  const [
+    browserNotificationPermission,
+    setBrowserNotificationPermission,
+  ] = useState<
+    BrowserNotificationPermission
+  >(
+    getBrowserNotificationPermission,
+  );
+
+  const shownDesktopNotificationIds =
+    useRef<
+      Set<string>
+    >(
+      new Set(),
+    );
 
   const [
     selectedPurchaseId,
@@ -137,7 +196,6 @@ export default function App() {
         ) ?? null
       : null;
 
-
   const refreshProtectedPurchases =
     async (): Promise<ProtectedPurchase[]> => {
       const purchases =
@@ -148,6 +206,22 @@ export default function App() {
       );
 
       return purchases;
+    };
+
+  const refreshNotifications =
+    async (): Promise<DeadlineNotification[]> => {
+      const result =
+        await notificationService.list();
+
+      setNotifications(
+        result.notifications,
+      );
+
+      setNotificationLeadDays(
+        result.preferences.leadDays,
+      );
+
+      return result.notifications;
     };
 
   useEffect(() => {
@@ -182,6 +256,184 @@ export default function App() {
         true;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled =
+      false;
+
+    const loadNotifications =
+      async () => {
+        try {
+          const result =
+            await notificationService.list();
+
+          if (
+            cancelled
+          ) {
+            return;
+          }
+
+          setNotifications(
+            result.notifications,
+          );
+
+          setNotificationLeadDays(
+            result.preferences.leadDays,
+          );
+        } catch (
+          error
+        ) {
+          if (
+            !cancelled
+          ) {
+            setScanError(
+              error instanceof Error
+                ? error.message
+                : 'Backstop could not load deadline reminders.',
+            );
+          }
+        }
+      };
+
+    void loadNotifications();
+
+    const intervalId =
+      window.setInterval(
+        () => {
+          void loadNotifications();
+        },
+        60_000,
+      );
+
+    return () => {
+      cancelled =
+        true;
+
+      window.clearInterval(
+        intervalId,
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    if (
+      browserNotificationPermission !==
+        'granted' ||
+      !(
+        'Notification' in
+        window
+      )
+    ) {
+      return;
+    }
+
+    for (
+      const reminder of
+      notifications
+    ) {
+      if (
+        !reminder.unread ||
+        reminder.delivered ||
+        shownDesktopNotificationIds.current.has(
+          reminder.id,
+        )
+      ) {
+        continue;
+      }
+
+      try {
+        const desktopNotification =
+          new Notification(
+            reminder.title,
+            {
+              body:
+                `${reminder.detail}. Deadline ${reminder.deadlineLabel}.`,
+              tag:
+                `backstop-${reminder.id}`,
+            },
+          );
+
+        shownDesktopNotificationIds.current.add(
+          reminder.id,
+        );
+
+        desktopNotification.onclick =
+          () => {
+            window.focus();
+
+            setSelectedPurchaseId(
+              reminder.purchaseId,
+            );
+
+            setView(
+              'purchase',
+            );
+
+            setNotifications(
+              (
+                current,
+              ) =>
+                current.map(
+                  (
+                    notification,
+                  ) =>
+                    notification.id ===
+                    reminder.id
+                      ? {
+                          ...notification,
+                          unread:
+                            false,
+                        }
+                      : notification,
+                ),
+            );
+
+            void notificationService.markRead(
+              reminder.id,
+            );
+
+            desktopNotification.close();
+          };
+
+        void notificationService
+          .markDelivered(
+            reminder.id,
+          )
+          .then(
+            () => {
+              setNotifications(
+                (
+                  current,
+                ) =>
+                  current.map(
+                    (
+                      notification,
+                    ) =>
+                      notification.id ===
+                      reminder.id
+                        ? {
+                            ...notification,
+                            delivered:
+                              true,
+                          }
+                        : notification,
+                  ),
+              );
+            },
+          )
+          .catch(
+            () => {
+              // The in-app reminder remains available even if delivery state cannot be persisted.
+            },
+          );
+      } catch {
+        // Browser notification delivery is best-effort; the in-app reminder remains available.
+      }
+    }
+  }, [
+    browserNotificationPermission,
+    notifications,
+  ]);
 
   const handleScan = async (
     url: string,
@@ -238,7 +490,10 @@ export default function App() {
         input,
       );
 
-      await refreshProtectedPurchases();
+      await Promise.all([
+        refreshProtectedPurchases(),
+        refreshNotifications(),
+      ]);
 
       setToastOpen(true);
     } catch (error) {
@@ -258,7 +513,10 @@ export default function App() {
         id,
       );
 
-      await refreshProtectedPurchases();
+      await Promise.all([
+        refreshProtectedPurchases(),
+        refreshNotifications(),
+      ]);
 
       if (
         selectedPurchaseId ===
@@ -299,6 +557,129 @@ export default function App() {
     });
   };
 
+  const handleNotificationClick = async (
+    notification:
+      DeadlineNotification,
+  ) => {
+    if (
+      notification.unread
+    ) {
+      setNotifications(
+        (
+          current,
+        ) =>
+          current.map(
+            (item) =>
+              item.id ===
+              notification.id
+                ? {
+                    ...item,
+                    unread:
+                      false,
+                  }
+                : item,
+          ),
+      );
+
+      try {
+        await notificationService.markRead(
+          notification.id,
+        );
+      } catch (error) {
+        setScanError(
+          error instanceof Error
+            ? error.message
+            : 'Backstop could not update this reminder.',
+        );
+      }
+    }
+
+    handleOpenPurchase(
+      notification.purchaseId,
+    );
+  };
+
+  const handleReadAllNotifications =
+    async () => {
+      try {
+        await notificationService.markAllRead();
+
+        setNotifications(
+          (
+            current,
+          ) =>
+            current.map(
+              (
+                notification,
+              ) => ({
+                ...notification,
+                unread:
+                  false,
+              }),
+            ),
+        );
+      } catch (error) {
+        setScanError(
+          error instanceof Error
+            ? error.message
+            : 'Backstop could not mark reminders as read.',
+        );
+      }
+    };
+
+  const handleNotificationLeadDaysChange =
+    async (
+      leadDays: number,
+    ) => {
+      try {
+        const preferences =
+          await notificationService.updateLeadDays(
+            leadDays,
+          );
+
+        setNotificationLeadDays(
+          preferences.leadDays,
+        );
+
+        await refreshNotifications();
+      } catch (error) {
+        setScanError(
+          error instanceof Error
+            ? error.message
+            : 'Backstop could not update reminder settings.',
+        );
+      }
+    };
+
+  const handleEnableDesktopNotifications =
+    async () => {
+      if (
+        !(
+          'Notification' in
+          window
+        )
+      ) {
+        setBrowserNotificationPermission(
+          'unsupported',
+        );
+
+        return;
+      }
+
+      try {
+        const permission =
+          await Notification.requestPermission();
+
+        setBrowserNotificationPermission(
+          permission,
+        );
+      } catch {
+        setScanError(
+          'Backstop could not request desktop-notification permission.',
+        );
+      }
+    };
+
   const handleUpdatePurchaseDates = async (
     input: ProtectionInput,
   ) => {
@@ -312,7 +693,10 @@ export default function App() {
         input,
       );
 
-      await refreshProtectedPurchases();
+      await Promise.all([
+        refreshProtectedPurchases(),
+        refreshNotifications(),
+      ]);
     } catch (error) {
       setScanError(
         error instanceof Error
@@ -336,7 +720,10 @@ export default function App() {
         status,
       );
 
-      await refreshProtectedPurchases();
+      await Promise.all([
+        refreshProtectedPurchases(),
+        refreshNotifications(),
+      ]);
     } catch (error) {
       setScanError(
         error instanceof Error
@@ -359,12 +746,17 @@ export default function App() {
   };
 
   const goDashboard = () => {
-    void refreshProtectedPurchases().catch(
-      (error: unknown) => {
+    void Promise.all([
+      refreshProtectedPurchases(),
+      refreshNotifications(),
+    ]).catch(
+      (
+        error: unknown,
+      ) => {
         setScanError(
           error instanceof Error
             ? error.message
-            : 'Backstop could not refresh the local protection database.',
+            : 'Backstop could not refresh local protection data.',
         );
       },
     );
@@ -406,6 +798,27 @@ export default function App() {
         }
         onHome={
           goHome
+        }
+        notifications={
+          notifications
+        }
+        notificationLeadDays={
+          notificationLeadDays
+        }
+        browserNotificationPermission={
+          browserNotificationPermission
+        }
+        onEnableDesktopNotifications={
+          handleEnableDesktopNotifications
+        }
+        onNotificationClick={
+          handleNotificationClick
+        }
+        onReadAllNotifications={
+          handleReadAllNotifications
+        }
+        onNotificationLeadDaysChange={
+          handleNotificationLeadDaysChange
         }
       />
 
@@ -543,7 +956,7 @@ export default function App() {
               '#C9FFEF',
           }}
         >
-          Purchase protected. Backstop is now tracking the calculated deadlines in your local database.
+          Purchase protected. Backstop is now tracking the calculated deadlines and reminder window in your local database.
         </Alert>
       </Snackbar>
 
