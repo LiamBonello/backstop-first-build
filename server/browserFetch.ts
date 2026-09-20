@@ -11,13 +11,26 @@ const MAX_UNIQUE_NETWORK_HOSTS = 24;
 const skippableResourceTypes = new Set(["image", "media", "font"]);
 const locallyHandledProtocols = new Set(["about:", "blob:", "data:"]);
 
-const browserFallbackEnabled = (): boolean =>
-  process.env.BACKSTOP_BROWSER_FALLBACK !== "0";
+export type BrowserFallbackMode = "disabled" | "conditional" | "force";
+
+export const getBrowserFallbackMode = (): BrowserFallbackMode => {
+  const configured = process.env.BACKSTOP_BROWSER_FALLBACK?.trim().toLowerCase();
+
+  if (configured === "0" || configured === "off" || configured === "false") {
+    return "disabled";
+  }
+
+  if (configured === "force") {
+    return "force";
+  }
+
+  return "conditional";
+};
 
 export async function fetchRenderedHtml(
   input: URL,
 ): Promise<FetchedHtml | null> {
-  if (!browserFallbackEnabled()) {
+  if (getBrowserFallbackMode() === "disabled") {
     return null;
   }
 
