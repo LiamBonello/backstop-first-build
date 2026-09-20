@@ -55,7 +55,7 @@ npm run dev
 
 Then open the Vite URL, normally `http://localhost:5173`.
 
-The default database connection is `postgresql://backstop:backstop@localhost:5432/backstop`, matching `docker-compose.yml`. Set `DATABASE_URL` in `.env` only if you want a different local PostgreSQL instance.
+The default Docker host port is `5433`, mapped to PostgreSQL `5432` inside the container. Use `postgresql://backstop:backstop@localhost:5433/backstop` for the local API. Set `DATABASE_URL` in `.env` only if you want a different local PostgreSQL instance.
 
 ## Verify the build
 
