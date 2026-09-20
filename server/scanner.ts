@@ -7,9 +7,10 @@ import type {
   RawScanResponseDto,
   RawSignalDto,
 } from "../src/types/purchase";
+import { fetchRenderedHtml } from "./browserFetch";
 import { inspectCompanyIdentity } from "./companyIntelligence";
 import { inspectDomain } from "./domainIntelligence";
-import { fetchHtml } from "./fetchHtml";
+import { fetchHtml, type FetchedHtml } from "./fetchHtml";
 import { inspectThreatIntelligence } from "./threatIntelligence";
 
 const MAIN_PAGE_MAX_BYTES = 10_000_000;
@@ -34,6 +35,18 @@ interface RenewalData {
   amount: number | null;
   interval: string | null;
   currency: string | null;
+}
+
+interface ParsedMainPage {
+  $: cheerio.CheerioAPI;
+  productHeading: string;
+  mainText: string;
+  productName: string;
+  ogSiteName: string;
+  applicationName: string;
+  merchantName: string;
+  price: PriceData;
+  anchorCount: number;
 }
 
 const clamp = (value: number, min = 0, max = 100): number =>
@@ -642,23 +655,12 @@ function extractPaymentMethods(
     .map((method) => method.label);
 }
 
-export async function analyzeUrl(
-  inputUrl: string,
-): Promise<RawScanResponseDto> {
-  const page = await fetchHtml(inputUrl, {
-    maxBytes: MAIN_PAGE_MAX_BYTES,
-  });
-
+function parseMainPage(page: FetchedHtml): ParsedMainPage {
   const $ = cheerio.load(page.html);
-
   const jsonLd = parseJsonLd($);
-
   const structuredProduct = extractStructuredProduct(jsonLd);
-
   const metaPrice = extractMetaPrice($);
-
   const productHeading = cleanText($("h1").first().text());
-
   const mainText = extractVisibleText(page.html);
 
   const visibleProductPrice = extractVisibleProductPrice(
@@ -693,6 +695,102 @@ export async function analyzeUrl(
       : metaPrice.amount !== null
         ? metaPrice
         : visibleProductPrice;
+
+  return {
+    $,
+    productHeading,
+    mainText,
+    productName,
+    ogSiteName,
+    applicationName,
+    merchantName,
+    price,
+    anchorCount: $("a[href]").length,
+  };
+}
+
+function shouldUseBrowserFallback(parsed: ParsedMainPage): boolean {
+  const javascriptGate =
+    /enable javascript|javascript (?:is )?required|requires javascript|turn on javascript/i.test(
+      parsed.mainText,
+    );
+
+  const sparsePage =
+    parsed.mainText.length < 350 &&
+    parsed.productHeading.length === 0;
+
+  return (
+    parsed.productName === "Product or offer" ||
+    parsed.price.amount === null ||
+    javascriptGate ||
+    sparsePage
+  );
+}
+
+function mainPageEvidenceScore(parsed: ParsedMainPage): number {
+  let score = 0;
+
+  if (parsed.productName !== "Product or offer") {
+    score += 4;
+  }
+
+  if (parsed.price.amount !== null) {
+    score += 5;
+  }
+
+  if (parsed.productHeading) {
+    score += 2;
+  }
+
+  if (parsed.mainText.length >= 1_000) {
+    score += 2;
+  } else if (parsed.mainText.length >= 300) {
+    score += 1;
+  }
+
+  if (parsed.anchorCount >= 5) {
+    score += 1;
+  }
+
+  return score;
+}
+
+export async function analyzeUrl(
+  inputUrl: string,
+): Promise<RawScanResponseDto> {
+  let page = await fetchHtml(inputUrl, {
+    maxBytes: MAIN_PAGE_MAX_BYTES,
+  });
+
+  let parsed = parseMainPage(page);
+  let scanMethod: RawScanResponseDto["scanMethod"] = "STATIC_HTML";
+
+  if (shouldUseBrowserFallback(parsed)) {
+    const renderedPage = await fetchRenderedHtml(page.finalUrl);
+
+    if (renderedPage) {
+      const renderedParsed = parseMainPage(renderedPage);
+
+      if (
+        mainPageEvidenceScore(renderedParsed) >=
+        mainPageEvidenceScore(parsed)
+      ) {
+        page = renderedPage;
+        parsed = renderedParsed;
+        scanMethod = "BROWSER_RENDERED";
+      }
+    }
+  }
+
+  const {
+    $,
+    productName,
+    ogSiteName,
+    applicationName,
+    merchantName,
+    price,
+    mainText,
+  } = parsed;
 
   const policyCandidates = discoverPolicies($, page.finalUrl);
 
@@ -1210,7 +1308,9 @@ export async function analyzeUrl(
 
     detail:
       price.amount === null
-        ? "The page structure did not expose a reliable product price to this scanner. Dynamic checkout pricing or script-rendered content may require a browser-based scan in a later build."
+        ? scanMethod === "BROWSER_RENDERED"
+          ? "Backstop rendered the page in Chromium but still could not extract a reliable product price. The price may only appear after user interaction, location selection or checkout."
+          : "The page structure did not expose a reliable product price to the static scanner, and a usable browser-rendered result was not available for this scan."
         : discountLanguageDetected
           ? "The page contains sale or discount language. This build can read the current offer, but it does not yet have an independent historical-price dataset to verify the claimed saving."
           : "Backstop extracted the current offer price from structured product data or page metadata. Independent historical-price verification will be added separately.",
@@ -1400,6 +1500,8 @@ export async function analyzeUrl(
 
   return {
     scanId: `scan_${randomUUID()}`,
+
+    scanMethod,
 
     merchantName,
 
