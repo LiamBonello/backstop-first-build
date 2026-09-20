@@ -1,35 +1,77 @@
 # Backstop
 
-Backstop is a consumer purchase-intelligence prototype that inspects a public shopping URL before purchase, explains transaction friction and risk signals, and can track key purchase deadlines after the user buys.
+Backstop is a local-first consumer purchase intelligence web app. It inspects a public shopping URL before purchase, preserves the evidence that mattered at the time of purchase, tracks return/warranty/renewal deadlines, reminds the user before those deadlines, and provides a structured resolution case when something goes wrong.
+
+## MVP product loop
+
+1. **Scan** a public product/store URL.
+2. **Understand** merchant, pricing, return, commitment, payment, domain and threat signals.
+3. **Protect** the purchase with purchase/delivery dates.
+4. **Preserve** the scan evidence that existed when protection started.
+5. **Track** return, warranty and renewal deadlines in PostgreSQL.
+6. **Remind** the user when a deadline enters the configured reminder window.
+7. **Resolve** purchase problems in a PostgreSQL-backed case workspace with status history, notes and a factual merchant-message draft.
 
 ## Current capabilities
 
-- Responsive React + TypeScript + Material UI interface
-- Real URL scanner API
-- Static HTML product and merchant extraction
-- Conditional Chromium rendering for JavaScript-heavy storefronts
-- Product name and price extraction
+### Purchase intelligence
+
+- React + TypeScript + Material UI interface
+- Express scanner API
+- Static HTML extraction with conditional Playwright Chromium rendering
+- Product and price extraction
 - Return, warranty and recurring-commitment analysis
 - Payment-method detection
 - RDAP domain-registration intelligence
 - DNS and TLS checks
-- Google Web Risk threat screening when configured
+- Optional Google Web Risk threat screening
 - Merchant legal-entity extraction
 - Free GLEIF LEI lookup
-- Evidence-coverage reporting
+- Evidence coverage reporting
 - Explainable heuristic risk scoring
-- Purchase-date and delivery-date capture
-- Calculated return, warranty and renewal deadlines
-- Dockerized PostgreSQL protected-purchase persistence
-- Dynamic protection dashboard
-- Protected-purchase detail view and event timeline
-- Saved scan-evidence snapshots for newly protected purchases
-- Editable protection dates with deadline recalculation
-- Purchase lifecycle states: active, kept, returned and refunded
-- PostgreSQL-backed deadline reminder generation
+
+### Protection
+
+- Purchase and delivery date capture
+- Server-side deadline calculation
+- PostgreSQL-protected purchases
+- Return, warranty and renewal deadline tracking
+- Purchase lifecycle states: active, kept, returned, refunded
+- Saved evidence snapshots
+- Protected-purchase timeline and detail workspace
+- Editable dates with deterministic deadline recalculation
+- Legacy localStorage purchase migration
+
+### Reminders
+
+- PostgreSQL-backed reminder records
 - Configurable 3, 7, 14 or 30-day reminder windows
-- In-app notification center with unread/read state
-- Optional browser desktop alerts while Backstop is open
+- In-app notification center
+- Read/unread state
+- Optional browser desktop notifications while Backstop is open
+- Stale reminder cleanup after date/lifecycle changes
+- Deduplication by purchase, deadline type and deadline date
+
+### Resolution cases
+
+- One resolution case per protected purchase
+- Issue categories including refused return, overdue refund, non-response, unexpected renewal, warranty problem and item-not-as-described
+- Amount-in-dispute and desired-outcome capture
+- Case statuses from draft through resolved/closed
+- Persisted case notes and status history
+- Recommended next-action guidance
+- Factual merchant-message draft generated from saved case facts
+- Direct link back to the originating protected purchase and its evidence
+
+## Local-first MVP boundary
+
+Backstop currently uses an anonymous browser UUID to namespace records in the local database. This is **not authentication** and is not a security boundary.
+
+The UI intentionally identifies this as **Local mode**. The MVP does not pretend accounts exist.
+
+Desktop notifications use the browser Notification API and therefore require Backstop to be open. Background push while the app is completely closed would require a service worker, push subscription infrastructure and a hosted deployment.
+
+Backstop is an evidence and workflow tool. It does not guarantee merchant legitimacy, policy enforceability, refunds, chargebacks or legal outcomes.
 
 ## Run locally
 
@@ -51,15 +93,23 @@ Apply database migrations:
 npm run db:migrate
 ```
 
-Start Backstop:
+Start the app:
 
 ```bash
 npm run dev
 ```
 
-Then open the Vite URL, normally `http://localhost:5173`.
+Open the Vite URL, normally:
 
-The default Docker host binding is `127.0.0.1:55432`, mapped to PostgreSQL `5432` inside the container. Use `postgresql://backstop:backstop@127.0.0.1:55432/backstop` for the local API. Set `DATABASE_URL` in `.env` only if you want a different local PostgreSQL instance.
+```text
+http://localhost:5173
+```
+
+The default database URL is:
+
+```text
+postgresql://backstop:backstop@127.0.0.1:55432/backstop
+```
 
 ## Verify the build
 
@@ -73,84 +123,65 @@ npm run build
 Create a project-root `.env` file when needed.
 
 ```env
+DATABASE_URL=postgresql://backstop:backstop@127.0.0.1:55432/backstop
 GOOGLE_WEB_RISK_API_KEY=
 BACKSTOP_BROWSER_FALLBACK=1
 ```
 
 Browser fallback modes:
 
-- `BACKSTOP_BROWSER_FALLBACK=1` uses Chromium only when static evidence is incomplete.
-- `BACKSTOP_BROWSER_FALLBACK=force` always attempts Chromium rendering for local verification.
-- `BACKSTOP_BROWSER_FALLBACK=0` forces static HTML scanning only.
+- `BACKSTOP_BROWSER_FALLBACK=1`: use Chromium only when static evidence is incomplete.
+- `BACKSTOP_BROWSER_FALLBACK=force`: always attempt Chromium rendering for local verification.
+- `BACKSTOP_BROWSER_FALLBACK=0`: static HTML only.
 
-Google Web Risk is optional. When no key is configured, Backstop reports that threat screening is unavailable rather than treating the URL as clean.
+Google Web Risk is optional. When no key is configured, Backstop reports threat screening as unavailable rather than treating the URL as clean.
 
-## Protection persistence
+## PostgreSQL migrations
 
-Protected purchases now use the Express API and a local PostgreSQL database. The browser keeps only an anonymous client UUID in `localStorage` so local records can be namespaced without implementing accounts yet.
+- `001_protected_purchases.sql` - protected purchases, deadlines and saved evidence
+- `002_deadline_notifications.sql` - reminder preferences and notification state
+- `003_resolution_cases.sql` - resolution cases and persisted case history
 
-On the first successful database load, Backstop automatically imports legacy protected purchases from the previous `localStorage` model and removes the old purchase payload only after the import succeeds.
+## Main architecture
 
-The database stores:
-
-- purchase and delivery dates
-- calculated return, warranty and renewal deadlines
-- detected protection terms
-- lifecycle state
-- saved scan-evidence snapshots
-- merchant/product/value metadata
-
-Deadline calculation is repeated server-side before persistence. The frontend still calculates previews for immediate UX, but PostgreSQL is the source of truth for saved records.
-
-This client UUID is **not authentication** and is not a security boundary. Real accounts remain a later production step.
-
-## Deadline reminders
-
-Backstop generates reminders from persisted return, warranty and renewal deadlines when those deadlines enter the configured reminder window.
-
-The default reminder window is 7 days and can be changed from the notification center to 3, 7, 14 or 30 days. Reminder records, read state and desktop-delivery state are stored in PostgreSQL.
-
-The browser polls the notification API once per minute while Backstop is open. Desktop alerts use the browser Notification API and therefore require explicit browser permission. This local build does not yet use service workers or web push, so desktop alerts are not delivered while Backstop is completely closed.
-
-Date or lifecycle changes invalidate stale unread reminders before new ones are generated.
-
-## Main files
+### Server
 
 - `server/scanner.ts` - scan orchestration and scoring
-- `server/db/pool.ts` - PostgreSQL connection pool
-- `server/db/migrate.ts` - SQL migration runner
-- `server/protectionRepository.ts` - PostgreSQL persistence layer
-- `server/protectionRoutes.ts` - protection API
-- `server/notificationRepository.ts` - reminder generation and notification persistence
-- `server/notificationRoutes.ts` - notification API
-- `server/browserFetch.ts` - restricted Chromium-rendered fallback
+- `server/fetchHtml.ts` - restricted static HTML fetch
+- `server/browserFetch.ts` - restricted Chromium fallback
+- `server/urlSafety.ts` - public-network target checks
 - `server/domainIntelligence.ts` - RDAP, DNS and TLS evidence
 - `server/threatIntelligence.ts` - Google Web Risk adapter
 - `server/companyIntelligence.ts` - merchant identity and GLEIF lookup
-- `src/mappers/scanMapper.ts` - API-to-UI transformation
+- `server/protectionRepository.ts` / `server/protectionRoutes.ts` - protected purchase persistence/API
+- `server/notificationRepository.ts` / `server/notificationRoutes.ts` - reminder generation/persistence/API
+- `server/resolutionRepository.ts` / `server/resolutionRoutes.ts` - resolution case persistence/API
+- `server/db/migrate.ts` - transactional SQL migration runner
+
+### Client
+
+- `src/App.tsx` - top-level product flow and local data orchestration
+- `src/services/backstopApi.ts` - shared API client and anonymous local client identity
 - `src/services/scanService.ts` - scanner client
-- `src/services/protectionService.ts` - protection API client, UI hydration and legacy localStorage migration
-- `src/services/backstopApi.ts` - shared browser API client and anonymous client identity
-- `src/services/notificationService.ts` - reminder API client
-- `src/mappers/notificationMapper.ts` - raw reminder data to UI copy/state
-- `src/components/ProtectionDrawer.tsx` - protection setup
-- `src/components/Dashboard.tsx` - saved purchase dashboard
-- `src/components/ProtectedPurchaseDetail.tsx` - purchase timeline, evidence and lifecycle actions
-- `src/components/NotificationCenter.tsx` - reminder bell, settings and notification feed
-- `src/components/RiskMeter.tsx` - explainable risk breakdown
+- `src/services/protectionService.ts` - protection client/hydration/legacy migration
+- `src/services/notificationService.ts` - reminder client
+- `src/services/resolutionService.ts` - resolution case client
+- `src/mappers/scanMapper.ts` - scanner API to UI mapping
+- `src/mappers/notificationMapper.ts` - notification API to UI mapping
+- `src/mappers/resolutionMapper.ts` - resolution case API to UI mapping and deterministic case copy
+- `src/components/Dashboard.tsx` - purchase and case overview
+- `src/components/ProtectedPurchaseDetail.tsx` - evidence/deadline/lifecycle workspace
+- `src/components/NotificationCenter.tsx` - reminder center
+- `src/components/ResolutionCaseView.tsx` - resolution workspace
 
-## Architecture notes
+## Production work intentionally outside this MVP
 
-Backstop keeps API extraction values and UI presentation separate. Scanning and persistence logic live outside React components, while components consume mapped types and derived view data.
+These are deployment/productization layers, not missing local MVP screens:
 
-The Chromium fallback is conditional and restricted: public HTTP(S) network targets are checked, service workers and WebSockets are blocked, and image/media/font resources are skipped.
-
-## Next logical build steps
-
-1. Authentication and mapping the local client namespace to real user accounts
-2. Service-worker/web-push delivery when Backstop is closed
-3. Receipt and email ingestion
-4. Dispute/refund workflow using saved evidence
-5. Historical pricing data
-6. Broader company-registry coverage
+1. Real user accounts and authorization
+2. Hosted PostgreSQL and deployment environment
+3. Service-worker/web-push delivery while the app is closed
+4. Email/receipt ingestion
+5. Historical price datasets
+6. Jurisdiction-specific consumer-rights/legal escalation logic
 7. Browser extension

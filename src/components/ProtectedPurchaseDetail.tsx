@@ -2,6 +2,7 @@ import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import EditCalendarRoundedIcon from '@mui/icons-material/EditCalendarRounded';
+import GavelRoundedIcon from '@mui/icons-material/GavelRounded';
 import Inventory2RoundedIcon from '@mui/icons-material/Inventory2Rounded';
 import KeyboardReturnRoundedIcon from '@mui/icons-material/KeyboardReturnRounded';
 import PaidRoundedIcon from '@mui/icons-material/PaidRounded';
@@ -31,6 +32,11 @@ import {
 } from 'react';
 
 import type {
+  CreateResolutionCaseRequestDto,
+  ResolutionCase,
+} from '../types/resolution';
+
+import type {
   ProtectedPurchase,
   ProtectionInput,
   PurchaseLifecycleStatus,
@@ -40,8 +46,14 @@ import {
   FindingCard,
 } from './FindingCard';
 
+import {
+  ResolutionCaseDrawer,
+} from './ResolutionCaseDrawer';
+
 interface ProtectedPurchaseDetailProps {
   purchase: ProtectedPurchase;
+  resolutionCase:
+    ResolutionCase | null;
   onBack: () => void;
   onUpdateDates: (
     input: ProtectionInput,
@@ -50,6 +62,13 @@ interface ProtectedPurchaseDetailProps {
     status: PurchaseLifecycleStatus,
   ) => void;
   onDelete: () => void;
+  onOpenResolutionCase:
+    () => void;
+  onCreateResolutionCase:
+    (
+      input:
+        CreateResolutionCaseRequestDto,
+    ) => Promise<void>;
 }
 
 const lifecycleTone: Record<
@@ -79,10 +98,13 @@ const lifecycleTone: Record<
 
 export function ProtectedPurchaseDetail({
   purchase,
+  resolutionCase,
   onBack,
   onUpdateDates,
   onLifecycleChange,
   onDelete,
+  onOpenResolutionCase,
+  onCreateResolutionCase,
 }: ProtectedPurchaseDetailProps) {
   const [
     editOpen,
@@ -92,6 +114,11 @@ export function ProtectedPurchaseDetail({
   const [
     deleteOpen,
     setDeleteOpen,
+  ] = useState(false);
+
+  const [
+    resolutionOpen,
+    setResolutionOpen,
   ] = useState(false);
 
   const [
@@ -390,6 +417,44 @@ export function ProtectedPurchaseDetail({
             }
           >
             Edit dates
+          </Button>
+
+          <Button
+            variant={
+              resolutionCase
+                ? 'contained'
+                : 'outlined'
+            }
+            startIcon={
+              <GavelRoundedIcon />
+            }
+            onClick={() => {
+              if (
+                resolutionCase
+              ) {
+                onOpenResolutionCase();
+
+                return;
+              }
+
+              setResolutionOpen(
+                true,
+              );
+            }}
+            sx={
+              resolutionCase
+                ? {
+                    color:
+                      '#07100D',
+                    background:
+                      'linear-gradient(110deg, #FFCA68, #6AF3D7)',
+                  }
+                : undefined
+            }
+          >
+            {resolutionCase
+              ? 'Open resolution case'
+              : 'Resolve a problem'}
           </Button>
 
           {purchase.lifecycleStatus !==
@@ -935,6 +1000,23 @@ export function ProtectedPurchaseDetail({
           </Button>
         </Stack>
       </Box>
+
+      <ResolutionCaseDrawer
+        open={
+          resolutionOpen
+        }
+        purchase={
+          purchase
+        }
+        onClose={() =>
+          setResolutionOpen(
+            false,
+          )
+        }
+        onCreate={
+          onCreateResolutionCase
+        }
+      />
 
       <Dialog
         open={

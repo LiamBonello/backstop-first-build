@@ -2,6 +2,7 @@ import express from 'express';
 import { checkDatabaseConnection } from './db/pool';
 import { notificationRouter } from './notificationRoutes';
 import { protectionRouter } from './protectionRoutes';
+import { resolutionRouter } from './resolutionRoutes';
 import { analyzeUrl } from './scanner';
 import { ScannerError } from './scannerError';
 
@@ -51,6 +52,11 @@ app.use(
 app.use(
   '/api/notifications',
   notificationRouter,
+);
+
+app.use(
+  '/api/resolution-cases',
+  resolutionRouter,
 );
 
 app.post(

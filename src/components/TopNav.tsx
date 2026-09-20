@@ -1,9 +1,12 @@
-import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
+import DashboardRoundedIcon from '@mui/icons-material/DashboardRounded';
+import StorageRoundedIcon from '@mui/icons-material/StorageRounded';
 
 import {
   Box,
   Button,
+  Chip,
   Stack,
+  Tooltip,
   Typography,
 } from '@mui/material';
 
@@ -87,7 +90,7 @@ export function TopNav({
         background:
           alpha(
             '#06070A',
-            0.72,
+            0.82,
           ),
         borderBottom:
           `1px solid ${alpha(
@@ -119,7 +122,9 @@ export function TopNav({
       >
         <Stack
           direction="row"
-          spacing={1.2}
+          spacing={
+            1.2
+          }
           onClick={
             onHome
           }
@@ -150,7 +155,9 @@ export function TopNav({
 
         <Stack
           direction="row"
-          spacing={1}
+          spacing={
+            1
+          }
           sx={{
             alignItems:
               'center',
@@ -158,21 +165,51 @@ export function TopNav({
         >
           <Button
             variant="text"
+            startIcon={
+              <DashboardRoundedIcon />
+            }
             onClick={
               onDashboard
             }
+            aria-label="Open My protection"
             sx={{
+              minWidth: {
+                xs:
+                  42,
+                sm:
+                  'auto',
+              },
+              px: {
+                xs:
+                  1,
+                sm:
+                  1.5,
+              },
               color:
                 'text.secondary',
-              display: {
-                xs:
-                  'none',
-                sm:
-                  'inline-flex',
+              '& .MuiButton-startIcon': {
+                m: {
+                  xs:
+                    0,
+                  sm:
+                    '0 8px 0 -4px',
+                },
               },
             }}
           >
-            My protection
+            <Box
+              component="span"
+              sx={{
+                display: {
+                  xs:
+                    'none',
+                  sm:
+                    'inline',
+                },
+              }}
+            >
+              My protection
+            </Box>
           </Button>
 
           <NotificationCenter
@@ -199,40 +236,32 @@ export function TopNav({
             }
           />
 
-          <Button
-            variant="outlined"
-            startIcon={
-              <ShieldOutlinedIcon />
-            }
-            sx={{
-              borderColor:
-                alpha(
-                  '#ffffff',
-                  0.1,
-                ),
-              color:
-                'text.primary',
-              bgcolor:
-                alpha(
-                  '#ffffff',
-                  0.025,
-                ),
-              '&:hover': {
-                borderColor:
-                  alpha(
-                    '#9D7BFF',
-                    0.45,
-                  ),
+          <Tooltip
+            title="Local-first mode. Purchase, reminder and case data are stored in your PostgreSQL instance."
+          >
+            <Chip
+              size="small"
+              icon={
+                <StorageRoundedIcon />
+              }
+              label="Local mode"
+              sx={{
+                display: {
+                  xs:
+                    'none',
+                  md:
+                    'inline-flex',
+                },
+                color:
+                  'text.secondary',
                 bgcolor:
                   alpha(
-                    '#9D7BFF',
-                    0.08,
+                    '#ffffff',
+                    0.025,
                   ),
-              },
-            }}
-          >
-            Sign in
-          </Button>
+              }}
+            />
+          </Tooltip>
         </Stack>
       </Stack>
     </Box>

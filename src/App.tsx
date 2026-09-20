@@ -1,6 +1,7 @@
 import {
   Alert,
   Box,
+  LinearProgress,
   Snackbar,
 } from '@mui/material';
 
@@ -13,6 +14,10 @@ import {
 import {
   AmbientBackground,
 } from './components/AmbientBackground';
+
+import {
+  AppFooter,
+} from './components/AppFooter';
 
 import {
   CursorGlow,
@@ -33,6 +38,10 @@ import type {
 import {
   ProtectedPurchaseDetail,
 } from './components/ProtectedPurchaseDetail';
+
+import {
+  ResolutionCaseView,
+} from './components/ResolutionCaseView';
 
 import {
   ScanResult,
@@ -60,6 +69,10 @@ import {
 } from './services/protectionService';
 
 import {
+  resolutionService,
+} from './services/resolutionService';
+
+import {
   scanService,
 } from './services/scanService';
 
@@ -74,11 +87,18 @@ import type {
   PurchaseScan,
 } from './types/purchase';
 
+import type {
+  CreateResolutionCaseRequestDto,
+  ResolutionCase,
+  ResolutionCaseStatus,
+} from './types/resolution';
+
 type View =
   | 'home'
   | 'result'
   | 'dashboard'
-  | 'purchase';
+  | 'purchase'
+  | 'resolution';
 
 const getBrowserNotificationPermission =
   (): BrowserNotificationPermission => {
@@ -96,6 +116,14 @@ const getBrowserNotificationPermission =
     return Notification.permission;
   };
 
+const errorMessage = (
+  error: unknown,
+  fallback: string,
+): string =>
+  error instanceof Error
+    ? error.message
+    : fallback;
+
 export default function App() {
   const [
     view,
@@ -110,6 +138,11 @@ export default function App() {
   ] = useState(false);
 
   const [
+    isBootstrapping,
+    setIsBootstrapping,
+  ] = useState(true);
+
+  const [
     scan,
     setScan,
   ] = useState<PurchaseScan | null>(
@@ -121,6 +154,13 @@ export default function App() {
     setProtectedPurchases,
   ] = useState<
     ProtectedPurchase[]
+  >([]);
+
+  const [
+    resolutionCases,
+    setResolutionCases,
+  ] = useState<
+    ResolutionCase[]
   >([]);
 
   const [
@@ -161,13 +201,20 @@ export default function App() {
   );
 
   const [
+    selectedResolutionCaseId,
+    setSelectedResolutionCaseId,
+  ] = useState<string | null>(
+    null,
+  );
+
+  const [
     toastOpen,
     setToastOpen,
   ] = useState(false);
 
   const [
-    scanError,
-    setScanError,
+    appError,
+    setAppError,
   ] = useState<string | null>(
     null,
   );
@@ -196,8 +243,28 @@ export default function App() {
         ) ?? null
       : null;
 
+  const selectedResolutionCase =
+    selectedResolutionCaseId
+      ? resolutionCases.find(
+          (resolutionCase) =>
+            resolutionCase.id ===
+            selectedResolutionCaseId,
+        ) ?? null
+      : null;
+
+  const selectedPurchaseResolutionCase =
+    selectedPurchaseId
+      ? resolutionCases.find(
+          (resolutionCase) =>
+            resolutionCase.purchaseId ===
+            selectedPurchaseId,
+        ) ?? null
+      : null;
+
   const refreshProtectedPurchases =
-    async (): Promise<ProtectedPurchase[]> => {
+    async (): Promise<
+      ProtectedPurchase[]
+    > => {
       const purchases =
         await protectionService.list();
 
@@ -208,8 +275,24 @@ export default function App() {
       return purchases;
     };
 
+  const refreshResolutionCases =
+    async (): Promise<
+      ResolutionCase[]
+    > => {
+      const cases =
+        await resolutionService.list();
+
+      setResolutionCases(
+        cases,
+      );
+
+      return cases;
+    };
+
   const refreshNotifications =
-    async (): Promise<DeadlineNotification[]> => {
+    async (): Promise<
+      DeadlineNotification[]
+    > => {
       const result =
         await notificationService.list();
 
@@ -228,28 +311,88 @@ export default function App() {
     let cancelled =
       false;
 
-    protectionService
-      .list()
-      .then(
-        (purchases) => {
-          if (!cancelled) {
-            setProtectedPurchases(
-              purchases,
-            );
-          }
-        },
-      )
-      .catch(
-        (error: unknown) => {
-          if (!cancelled) {
-            setScanError(
-              error instanceof Error
-                ? error.message
-                : 'Backstop could not load the local protection database.',
-            );
-          }
-        },
-      );
+    const bootstrap =
+      async () => {
+        const [
+          purchasesResult,
+          casesResult,
+          notificationsResult,
+        ] =
+          await Promise.allSettled([
+            protectionService.list(),
+            resolutionService.list(),
+            notificationService.list(),
+          ]);
+
+        if (
+          cancelled
+        ) {
+          return;
+        }
+
+        if (
+          purchasesResult.status ===
+          'fulfilled'
+        ) {
+          setProtectedPurchases(
+            purchasesResult.value,
+          );
+        }
+
+        if (
+          casesResult.status ===
+          'fulfilled'
+        ) {
+          setResolutionCases(
+            casesResult.value,
+          );
+        }
+
+        if (
+          notificationsResult.status ===
+          'fulfilled'
+        ) {
+          setNotifications(
+            notificationsResult.value.notifications,
+          );
+
+          setNotificationLeadDays(
+            notificationsResult.value.preferences.leadDays,
+          );
+        }
+
+        const failure =
+          [
+            purchasesResult,
+            casesResult,
+            notificationsResult,
+          ].find(
+            (
+              result,
+            ) =>
+              result.status ===
+              'rejected',
+          );
+
+        if (
+          failure &&
+          failure.status ===
+            'rejected'
+        ) {
+          setAppError(
+            errorMessage(
+              failure.reason,
+              'Backstop could not load all local data.',
+            ),
+          );
+        }
+
+        setIsBootstrapping(
+          false,
+        );
+      };
+
+    void bootstrap();
 
     return () => {
       cancelled =
@@ -258,61 +401,22 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    let cancelled =
-      false;
-
-    const loadNotifications =
-      async () => {
-        try {
-          const result =
-            await notificationService.list();
-
-          if (
-            cancelled
-          ) {
-            return;
-          }
-
-          setNotifications(
-            result.notifications,
-          );
-
-          setNotificationLeadDays(
-            result.preferences.leadDays,
-          );
-        } catch (
-          error
-        ) {
-          if (
-            !cancelled
-          ) {
-            setScanError(
-              error instanceof Error
-                ? error.message
-                : 'Backstop could not load deadline reminders.',
-            );
-          }
-        }
-      };
-
-    void loadNotifications();
-
     const intervalId =
       window.setInterval(
         () => {
-          void loadNotifications();
+          void refreshNotifications().catch(
+            () => {
+              // Keep the existing in-app state when a background refresh fails.
+            },
+          );
         },
         60_000,
       );
 
-    return () => {
-      cancelled =
-        true;
-
+    return () =>
       window.clearInterval(
         intervalId,
       );
-    };
   }, []);
 
   useEffect(() => {
@@ -363,6 +467,10 @@ export default function App() {
 
             setSelectedPurchaseId(
               reminder.purchaseId,
+            );
+
+            setSelectedResolutionCaseId(
+              null,
             );
 
             setView(
@@ -444,12 +552,19 @@ export default function App() {
   const handleScan = async (
     url: string,
   ) => {
-    if (isScanning) {
+    if (
+      isScanning
+    ) {
       return;
     }
 
-    setIsScanning(true);
-    setScanError(null);
+    setIsScanning(
+      true,
+    );
+
+    setAppError(
+      null,
+    );
 
     try {
       const response =
@@ -463,28 +578,41 @@ export default function App() {
         ),
       );
 
+      setSelectedPurchaseId(
+        null,
+      );
+
+      setSelectedResolutionCaseId(
+        null,
+      );
+
       setView(
         'result',
       );
 
       window.scrollTo({
-        top: 0,
+        top:
+          0,
         behavior:
           'smooth',
       });
     } catch (error) {
-      setScanError(
-        error instanceof Error
-          ? error.message
-          : 'Backstop could not complete that scan.',
+      setAppError(
+        errorMessage(
+          error,
+          'Backstop could not complete that scan.',
+        ),
       );
     } finally {
-      setIsScanning(false);
+      setIsScanning(
+        false,
+      );
     }
   };
 
   const handleProtect = async (
-    input: ProtectionInput,
+    input:
+      ProtectionInput,
   ) => {
     if (!scan) {
       return;
@@ -501,12 +629,15 @@ export default function App() {
         refreshNotifications(),
       ]);
 
-      setToastOpen(true);
+      setToastOpen(
+        true,
+      );
     } catch (error) {
-      setScanError(
-        error instanceof Error
-          ? error.message
-          : 'Backstop could not save this protected purchase.',
+      setAppError(
+        errorMessage(
+          error,
+          'Backstop could not save this protected purchase.',
+        ),
       );
     }
   };
@@ -521,6 +652,7 @@ export default function App() {
 
       await Promise.all([
         refreshProtectedPurchases(),
+        refreshResolutionCases(),
         refreshNotifications(),
       ]);
 
@@ -532,15 +664,20 @@ export default function App() {
           null,
         );
 
+        setSelectedResolutionCaseId(
+          null,
+        );
+
         setView(
           'dashboard',
         );
       }
     } catch (error) {
-      setScanError(
-        error instanceof Error
-          ? error.message
-          : 'Backstop could not remove this protected purchase.',
+      setAppError(
+        errorMessage(
+          error,
+          'Backstop could not remove this protected purchase.',
+        ),
       );
     }
   };
@@ -552,58 +689,231 @@ export default function App() {
       id,
     );
 
+    setSelectedResolutionCaseId(
+      null,
+    );
+
     setView(
       'purchase',
     );
 
     window.scrollTo({
-      top: 0,
+      top:
+        0,
       behavior:
         'smooth',
     });
   };
 
-  const handleNotificationClick = async (
-    notification:
-      DeadlineNotification,
+  const handleOpenResolutionCase = (
+    id: string,
   ) => {
-    if (
-      notification.unread
-    ) {
-      setNotifications(
-        (
-          current,
-        ) =>
-          current.map(
-            (item) =>
-              item.id ===
-              notification.id
-                ? {
-                    ...item,
-                    unread:
-                      false,
-                  }
-                : item,
-          ),
+    const resolutionCase =
+      resolutionCases.find(
+        (item) =>
+          item.id ===
+          id,
       );
 
-      try {
-        await notificationService.markRead(
-          notification.id,
-        );
-      } catch (error) {
-        setScanError(
-          error instanceof Error
-            ? error.message
-            : 'Backstop could not update this reminder.',
-        );
-      }
+    if (
+      !resolutionCase
+    ) {
+      return;
     }
 
-    handleOpenPurchase(
-      notification.purchaseId,
+    setSelectedResolutionCaseId(
+      id,
     );
+
+    setSelectedPurchaseId(
+      resolutionCase.purchaseId,
+    );
+
+    setView(
+      'resolution',
+    );
+
+    window.scrollTo({
+      top:
+        0,
+      behavior:
+        'smooth',
+    });
   };
+
+  const handleCreateResolutionCase =
+    async (
+      input:
+        CreateResolutionCaseRequestDto,
+    ) => {
+      try {
+        const created =
+          await resolutionService.create(
+            input,
+          );
+
+        await refreshResolutionCases();
+
+        setSelectedResolutionCaseId(
+          created.id,
+        );
+
+        setSelectedPurchaseId(
+          created.purchaseId,
+        );
+
+        setView(
+          'resolution',
+        );
+
+        window.scrollTo({
+          top:
+            0,
+          behavior:
+            'smooth',
+        });
+      } catch (error) {
+        setAppError(
+          errorMessage(
+            error,
+            'Backstop could not create this resolution case.',
+          ),
+        );
+
+        throw error;
+      }
+    };
+
+  const handleResolutionStatusChange =
+    async (
+      status:
+        ResolutionCaseStatus,
+    ) => {
+      if (
+        !selectedResolutionCaseId
+      ) {
+        return;
+      }
+
+      try {
+        const updated =
+          await resolutionService.setStatus(
+            selectedResolutionCaseId,
+            status,
+          );
+
+        setResolutionCases(
+          (
+            current,
+          ) =>
+            current.map(
+              (
+                resolutionCase,
+              ) =>
+                resolutionCase.id ===
+                updated.id
+                  ? updated
+                  : resolutionCase,
+            ),
+        );
+      } catch (error) {
+        setAppError(
+          errorMessage(
+            error,
+            'Backstop could not update the resolution case.',
+          ),
+        );
+      }
+    };
+
+  const handleAddResolutionNote =
+    async (
+      note: string,
+    ) => {
+      if (
+        !selectedResolutionCaseId
+      ) {
+        return;
+      }
+
+      try {
+        const updated =
+          await resolutionService.addNote(
+            selectedResolutionCaseId,
+            note,
+          );
+
+        setResolutionCases(
+          (
+            current,
+          ) =>
+            current.map(
+              (
+                resolutionCase,
+              ) =>
+                resolutionCase.id ===
+                updated.id
+                  ? updated
+                  : resolutionCase,
+            ),
+        );
+      } catch (error) {
+        setAppError(
+          errorMessage(
+            error,
+            'Backstop could not save the case note.',
+          ),
+        );
+
+        throw error;
+      }
+    };
+
+  const handleNotificationClick =
+    async (
+      notification:
+        DeadlineNotification,
+    ) => {
+      if (
+        notification.unread
+      ) {
+        setNotifications(
+          (
+            current,
+          ) =>
+            current.map(
+              (
+                item,
+              ) =>
+                item.id ===
+                notification.id
+                  ? {
+                      ...item,
+                      unread:
+                        false,
+                    }
+                  : item,
+            ),
+        );
+
+        try {
+          await notificationService.markRead(
+            notification.id,
+          );
+        } catch (error) {
+          setAppError(
+            errorMessage(
+              error,
+              'Backstop could not update this reminder.',
+            ),
+          );
+        }
+      }
+
+      handleOpenPurchase(
+        notification.purchaseId,
+      );
+    };
 
   const handleReadAllNotifications =
     async () => {
@@ -625,10 +935,11 @@ export default function App() {
             ),
         );
       } catch (error) {
-        setScanError(
-          error instanceof Error
-            ? error.message
-            : 'Backstop could not mark reminders as read.',
+        setAppError(
+          errorMessage(
+            error,
+            'Backstop could not mark reminders as read.',
+          ),
         );
       }
     };
@@ -649,10 +960,11 @@ export default function App() {
 
         await refreshNotifications();
       } catch (error) {
-        setScanError(
-          error instanceof Error
-            ? error.message
-            : 'Backstop could not update reminder settings.',
+        setAppError(
+          errorMessage(
+            error,
+            'Backstop could not update reminder settings.',
+          ),
         );
       }
     };
@@ -680,117 +992,158 @@ export default function App() {
           permission,
         );
       } catch {
-        setScanError(
+        setAppError(
           'Backstop could not request desktop-notification permission.',
         );
       }
     };
 
-  const handleUpdatePurchaseDates = async (
-    input: ProtectionInput,
-  ) => {
-    if (!selectedPurchaseId) {
-      return;
-    }
+  const handleUpdatePurchaseDates =
+    async (
+      input:
+        ProtectionInput,
+    ) => {
+      if (
+        !selectedPurchaseId
+      ) {
+        return;
+      }
 
-    try {
-      await protectionService.updateDates(
-        selectedPurchaseId,
-        input,
-      );
-
-      await Promise.all([
-        refreshProtectedPurchases(),
-        refreshNotifications(),
-      ]);
-    } catch (error) {
-      setScanError(
-        error instanceof Error
-          ? error.message
-          : 'Backstop could not update the purchase dates.',
-      );
-    }
-  };
-
-  const handleLifecycleChange = async (
-    status:
-      PurchaseLifecycleStatus,
-  ) => {
-    if (!selectedPurchaseId) {
-      return;
-    }
-
-    try {
-      await protectionService.setLifecycle(
-        selectedPurchaseId,
-        status,
-      );
-
-      await Promise.all([
-        refreshProtectedPurchases(),
-        refreshNotifications(),
-      ]);
-    } catch (error) {
-      setScanError(
-        error instanceof Error
-          ? error.message
-          : 'Backstop could not update this purchase status.',
-      );
-    }
-  };
-
-  const goHome = () => {
-    setView(
-      'home',
-    );
-
-    window.scrollTo({
-      top: 0,
-      behavior:
-        'smooth',
-    });
-  };
-
-  const goDashboard = () => {
-    void Promise.all([
-      refreshProtectedPurchases(),
-      refreshNotifications(),
-    ]).catch(
-      (
-        error: unknown,
-      ) => {
-        setScanError(
-          error instanceof Error
-            ? error.message
-            : 'Backstop could not refresh local protection data.',
+      try {
+        await protectionService.updateDates(
+          selectedPurchaseId,
+          input,
         );
-      },
-    );
 
-    setSelectedPurchaseId(
-      null,
-    );
+        await Promise.all([
+          refreshProtectedPurchases(),
+          refreshResolutionCases(),
+          refreshNotifications(),
+        ]);
+      } catch (error) {
+        setAppError(
+          errorMessage(
+            error,
+            'Backstop could not update the purchase dates.',
+          ),
+        );
+      }
+    };
 
-    setView(
-      'dashboard',
-    );
+  const handleLifecycleChange =
+    async (
+      status:
+        PurchaseLifecycleStatus,
+    ) => {
+      if (
+        !selectedPurchaseId
+      ) {
+        return;
+      }
 
-    window.scrollTo({
-      top: 0,
-      behavior:
-        'smooth',
-    });
-  };
+      try {
+        await protectionService.setLifecycle(
+          selectedPurchaseId,
+          status,
+        );
+
+        await Promise.all([
+          refreshProtectedPurchases(),
+          refreshNotifications(),
+        ]);
+      } catch (error) {
+        setAppError(
+          errorMessage(
+            error,
+            'Backstop could not update this purchase status.',
+          ),
+        );
+      }
+    };
+
+  const goHome =
+    () => {
+      setView(
+        'home',
+      );
+
+      setSelectedPurchaseId(
+        null,
+      );
+
+      setSelectedResolutionCaseId(
+        null,
+      );
+
+      window.scrollTo({
+        top:
+          0,
+        behavior:
+          'smooth',
+      });
+    };
+
+  const goDashboard =
+    () => {
+      void Promise.all([
+        refreshProtectedPurchases(),
+        refreshResolutionCases(),
+        refreshNotifications(),
+      ]).catch(
+        (
+          error: unknown,
+        ) => {
+          setAppError(
+            errorMessage(
+              error,
+              'Backstop could not refresh local protection data.',
+            ),
+          );
+        },
+      );
+
+      setSelectedPurchaseId(
+        null,
+      );
+
+      setSelectedResolutionCaseId(
+        null,
+      );
+
+      setView(
+        'dashboard',
+      );
+
+      window.scrollTo({
+        top:
+          0,
+        behavior:
+          'smooth',
+      });
+    };
+
+  const goBackToPurchaseFromResolution =
+    () => {
+      if (
+        !selectedResolutionCase
+      ) {
+        goDashboard();
+
+        return;
+      }
+
+      handleOpenPurchase(
+        selectedResolutionCase.purchaseId,
+      );
+    };
 
   return (
     <Box
       sx={{
         minHeight:
           '100vh',
-
         position:
           'relative',
-
         isolation:
           'isolate',
       }}
@@ -827,6 +1180,32 @@ export default function App() {
           handleNotificationLeadDaysChange
         }
       />
+
+      {isBootstrapping && (
+        <LinearProgress
+          aria-label="Loading local Backstop data"
+          sx={{
+            position:
+              'fixed',
+            top:
+              76,
+            left:
+              0,
+            right:
+              0,
+            zIndex:
+              19,
+            height:
+              2,
+            bgcolor:
+              'transparent',
+            '& .MuiLinearProgress-bar': {
+              background:
+                'linear-gradient(90deg, #9D7BFF, #61F4D5)',
+            },
+          }}
+        />
+      )}
 
       <Box
         component="main"
@@ -878,6 +1257,9 @@ export default function App() {
             purchase={
               selectedPurchase
             }
+            resolutionCase={
+              selectedPurchaseResolutionCase
+            }
             onBack={
               goDashboard
             }
@@ -892,6 +1274,37 @@ export default function App() {
                 selectedPurchase.id,
               )
             }
+            onOpenResolutionCase={() => {
+              if (
+                selectedPurchaseResolutionCase
+              ) {
+                handleOpenResolutionCase(
+                  selectedPurchaseResolutionCase.id,
+                );
+              }
+            }}
+            onCreateResolutionCase={
+              handleCreateResolutionCase
+            }
+          />
+        )}
+
+        {view ===
+          'resolution' &&
+          selectedResolutionCase && (
+          <ResolutionCaseView
+            resolutionCase={
+              selectedResolutionCase
+            }
+            onBackToPurchase={
+              goBackToPurchaseFromResolution
+            }
+            onStatusChange={
+              handleResolutionStatusChange
+            }
+            onAddNote={
+              handleAddResolutionNote
+            }
           />
         )}
 
@@ -901,6 +1314,9 @@ export default function App() {
             purchases={
               protectedPurchases
             }
+            cases={
+              resolutionCases
+            }
             metrics={
               dashboardMetrics
             }
@@ -909,6 +1325,9 @@ export default function App() {
             }
             onOpenPurchase={
               handleOpenPurchase
+            }
+            onOpenCase={
+              handleOpenResolutionCase
             }
             onBack={() =>
               setView(
@@ -923,6 +1342,8 @@ export default function App() {
           />
         )}
       </Box>
+
+      <AppFooter />
 
       <Snackbar
         open={
@@ -954,29 +1375,27 @@ export default function App() {
           sx={{
             borderRadius:
               3,
-
             bgcolor:
               '#152A24',
-
             color:
               '#C9FFEF',
           }}
         >
-          Purchase protected. Backstop is now tracking the calculated deadlines and reminder window in your local database.
+          Purchase protected. Backstop is now tracking its evidence, deadlines and reminder window.
         </Alert>
       </Snackbar>
 
       <Snackbar
         open={
           Boolean(
-            scanError,
+            appError,
           )
         }
         autoHideDuration={
           7000
         }
         onClose={() =>
-          setScanError(
+          setAppError(
             null,
           )
         }
@@ -991,19 +1410,18 @@ export default function App() {
           severity="error"
           variant="filled"
           onClose={() =>
-            setScanError(
+            setAppError(
               null,
             )
           }
           sx={{
             borderRadius:
               3,
-
             maxWidth:
               620,
           }}
         >
-          {scanError}
+          {appError}
         </Alert>
       </Snackbar>
     </Box>

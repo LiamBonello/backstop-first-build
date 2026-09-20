@@ -3,6 +3,7 @@ import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
 import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
+import GavelRoundedIcon from '@mui/icons-material/GavelRounded';
 import SavingsOutlinedIcon from '@mui/icons-material/SavingsOutlined';
 import ShieldRoundedIcon from '@mui/icons-material/ShieldRounded';
 import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
@@ -20,6 +21,10 @@ import {
 import { alpha } from '@mui/material/styles';
 
 import type {
+  ResolutionCase,
+} from '../types/resolution';
+
+import type {
   DashboardMetric,
   ProtectedPurchase,
 } from '../types/purchase';
@@ -27,6 +32,9 @@ import type {
 interface DashboardProps {
   purchases:
     ProtectedPurchase[];
+
+  cases:
+    ResolutionCase[];
 
   metrics:
     DashboardMetric[];
@@ -46,15 +54,22 @@ interface DashboardProps {
     (
       id: string,
     ) => void;
+
+  onOpenCase:
+    (
+      id: string,
+    ) => void;
 }
 
 export function Dashboard({
   purchases,
+  cases,
   metrics,
   onBack,
   onScanNew,
   onRemovePurchase,
   onOpenPurchase,
+  onOpenCase,
 }: DashboardProps) {
   const metricIcons: Record<
     DashboardMetric['icon'],
@@ -741,6 +756,284 @@ export function Dashboard({
           )}
         </Stack>
       )}
+      {cases.length > 0 && (
+        <>
+          <Stack
+            direction={{
+              xs:
+                'column',
+              sm:
+                'row',
+            }}
+            sx={{
+              justifyContent:
+                'space-between',
+              alignItems: {
+                xs:
+                  'flex-start',
+                sm:
+                  'flex-end',
+              },
+              gap:
+                1,
+              mt:
+                6,
+              mb:
+                2,
+            }}
+          >
+            <Box>
+              <Typography
+                variant="h3"
+                sx={{
+                  fontSize:
+                    '1.6rem',
+                }}
+              >
+                Resolution cases
+              </Typography>
+
+              <Typography
+                variant="body2"
+                sx={{
+                  mt:
+                    0.5,
+                  color:
+                    'text.secondary',
+                }}
+              >
+                Purchase problems you are actively documenting and resolving.
+              </Typography>
+            </Box>
+
+            <Chip
+              size="small"
+              icon={
+                <GavelRoundedIcon />
+              }
+              label={`${cases.filter(
+                (
+                  resolutionCase,
+                ) =>
+                  resolutionCase.status !==
+                    'resolved' &&
+                  resolutionCase.status !==
+                    'closed',
+              ).length} open`}
+              sx={{
+                color:
+                  '#FFDEA0',
+                bgcolor:
+                  alpha(
+                    '#FFCA68',
+                    0.055,
+                  ),
+              }}
+            />
+          </Stack>
+
+          <Stack
+            spacing={
+              1.2
+            }
+          >
+            {cases.map(
+              (
+                resolutionCase,
+              ) => (
+                <Stack
+                  key={
+                    resolutionCase.id
+                  }
+                  role="button"
+                  tabIndex={
+                    0
+                  }
+                  direction={{
+                    xs:
+                      'column',
+                    sm:
+                      'row',
+                  }}
+                  spacing={
+                    2
+                  }
+                  onClick={() =>
+                    onOpenCase(
+                      resolutionCase.id,
+                    )
+                  }
+                  onKeyDown={(
+                    event,
+                  ) => {
+                    if (
+                      event.key ===
+                        'Enter' ||
+                      event.key ===
+                        ' '
+                    ) {
+                      event.preventDefault();
+
+                      onOpenCase(
+                        resolutionCase.id,
+                      );
+                    }
+                  }}
+                  sx={{
+                    alignItems: {
+                      xs:
+                        'flex-start',
+                      sm:
+                        'center',
+                    },
+                    p:
+                      2.2,
+                    borderRadius:
+                      4,
+                    bgcolor:
+                      alpha(
+                        '#0D1016',
+                        0.68,
+                      ),
+                    border:
+                      `1px solid ${alpha(
+                        resolutionCase.statusTone ===
+                          'positive'
+                          ? '#61F4D5'
+                          : resolutionCase.statusTone ===
+                              'warning'
+                            ? '#FFCA68'
+                            : '#9D7BFF',
+                        0.12,
+                      )}`,
+                    cursor:
+                      'pointer',
+                    outline:
+                      'none',
+                    transition:
+                      'transform .2s ease, border-color .2s ease',
+                    '&:hover': {
+                      transform:
+                        'translateY(-2px)',
+                      borderColor:
+                        alpha(
+                          '#9D7BFF',
+                          0.24,
+                        ),
+                    },
+                    '&:focus-visible': {
+                      boxShadow:
+                        `0 0 0 2px ${alpha(
+                          '#9D7BFF',
+                          0.13,
+                        )}`,
+                    },
+                  }}
+                >
+                  <Box
+                    sx={{
+                      width:
+                        44,
+                      height:
+                        44,
+                      flexShrink:
+                        0,
+                      borderRadius:
+                        '14px',
+                      display:
+                        'grid',
+                      placeItems:
+                        'center',
+                      color:
+                        'warning.main',
+                      bgcolor:
+                        alpha(
+                          '#FFCA68',
+                          0.07,
+                        ),
+                    }}
+                  >
+                    <GavelRoundedIcon />
+                  </Box>
+
+                  <Box
+                    sx={{
+                      flex:
+                        1,
+                      minWidth:
+                        0,
+                    }}
+                  >
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color:
+                          'text.secondary',
+                      }}
+                    >
+                      {resolutionCase.merchant} · {resolutionCase.issueLabel}
+                    </Typography>
+
+                    <Typography
+                      sx={{
+                        fontWeight:
+                          700,
+                      }}
+                    >
+                      {resolutionCase.product}
+                    </Typography>
+
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        display:
+                          'block',
+                        mt:
+                          0.35,
+                        color:
+                          'text.secondary',
+                      }}
+                    >
+                      {resolutionCase.statusLabel} · updated {resolutionCase.updatedAtLabel}
+                    </Typography>
+                  </Box>
+
+                  <Box
+                    sx={{
+                      textAlign: {
+                        xs:
+                          'left',
+                        sm:
+                          'right',
+                      },
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        fontWeight:
+                          700,
+                      }}
+                    >
+                      {resolutionCase.amountInDisputeLabel}
+                    </Typography>
+
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        color:
+                          'text.secondary',
+                      }}
+                    >
+                      Amount in dispute
+                    </Typography>
+                  </Box>
+                </Stack>
+              ),
+            )}
+          </Stack>
+        </>
+      )}
+
     </Box>
   );
 }
