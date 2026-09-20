@@ -117,18 +117,27 @@ const requestJson = async <T>(
   path: string,
   init?: RequestInit,
 ): Promise<T> => {
+  const headers =
+    new Headers(
+      init?.headers,
+    );
+
+  headers.set(
+    'content-type',
+    'application/json',
+  );
+
+  headers.set(
+    'x-backstop-client-id',
+    getClientId(),
+  );
+
   const response =
     await fetch(
       `${apiBaseUrl}${path}`,
       {
         ...init,
-        headers: {
-          'content-type':
-            'application/json',
-          'x-backstop-client-id':
-            getClientId(),
-          ...init?.headers,
-        },
+        headers,
       },
     );
 
