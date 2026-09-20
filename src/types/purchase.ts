@@ -272,6 +272,62 @@ export interface ProtectionEvidenceSnapshot {
   findings: Finding[];
 }
 
+
+export interface ProtectionTermsDto {
+  returnWindowDays: number | null;
+  warrantyMonths: number | null;
+  renewalAmount: number | null;
+  renewalInterval: string | null;
+}
+
+export interface ProtectedPurchaseRecordDto {
+  id: string;
+  sourceScanId: string;
+  merchant: string;
+  domain: string;
+  product: string;
+  amount: number | null;
+  currency: string | null;
+  amountLabel: string;
+  purchaseDate: string;
+  deliveryDate: string | null;
+  returnDeadline: string | null;
+  warrantyDeadline: string | null;
+  renewalDeadline: string | null;
+  protectionTerms: ProtectionTermsDto;
+  lifecycleStatus: PurchaseLifecycleStatus;
+  lifecycleUpdatedAtIso: string | null;
+  evidenceSnapshot: ProtectionEvidenceSnapshot | null;
+  createdAtIso: string;
+}
+
+export interface CreateProtectedPurchaseRequestDto {
+  sourceScanId: string;
+  merchant: string;
+  domain: string;
+  product: string;
+  amount: number | null;
+  currency: string | null;
+  amountLabel: string;
+  purchaseDate: string;
+  deliveryDate: string | null;
+  protectionTerms: ProtectionTermsDto;
+  evidenceSnapshot: ProtectionEvidenceSnapshot;
+}
+
+export interface ImportProtectedPurchasesRequestDto {
+  records: ProtectedPurchaseRecordDto[];
+}
+
+export interface UpdateProtectedPurchaseDatesRequestDto {
+  purchaseDate: string;
+  deliveryDate: string | null;
+}
+
+export interface UpdateProtectedPurchaseLifecycleRequestDto {
+  lifecycleStatus: PurchaseLifecycleStatus;
+}
+
 export interface ProtectionTimelineItem {
   id: string;
   label: string;
