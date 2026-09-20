@@ -430,6 +430,21 @@ const buildDeadlines = (
   | 'warrantyDeadline'
   | 'renewalDeadline'
 > => {
+  if (!isDateOnly(input.purchaseDate)) {
+    throw new Error(
+      'Enter a valid purchase date.',
+    );
+  }
+
+  if (
+    input.deliveryDate &&
+    !isDateOnly(input.deliveryDate)
+  ) {
+    throw new Error(
+      'Enter a valid delivery date.',
+    );
+  }
+
   if (
     input.deliveryDate &&
     input.deliveryDate <
