@@ -210,6 +210,11 @@ export interface ExternalIntelligence {
 }
 
 export interface PurchaseProtection {
+  returnWindowDays: number | null;
+  warrantyMonths: number | null;
+  renewalAmount: number | null;
+  renewalInterval: string | null;
+
   returnWindowLabel: string;
   warrantyLabel: string;
 
@@ -227,6 +232,8 @@ export interface PurchaseScan {
   domain: string;
   product: string;
 
+  amount: number | null;
+  currency: string | null;
   amountLabel: string;
 
   evidenceCoverage: number;
@@ -246,14 +253,35 @@ export interface PurchaseScan {
     PurchaseProtection;
 }
 
+export interface ProtectionInput {
+  purchaseDate: string;
+  deliveryDate: string | null;
+}
+
 export interface ProtectedPurchase {
   id: string;
+  sourceScanId: string;
+
   merchant: string;
+  domain: string;
   product: string;
 
+  amount: number | null;
+  currency: string | null;
   amountLabel: string;
 
+  purchaseDate: string;
+  deliveryDate: string | null;
+  purchaseDateLabel: string;
+  deliveryDateLabel: string | null;
+
+  returnDeadline: string | null;
+  warrantyDeadline: string | null;
+  renewalDeadline: string | null;
+
+  nextDeadlineIso: string | null;
   nextDeadlineLabel: string;
+  deadlineCount: number;
 
   status:
     | 'protected'
@@ -269,5 +297,5 @@ export interface DashboardMetric {
     | 'shield'
     | 'value'
     | 'deadline'
-    | 'recovered';
+    | 'attention';
 }
