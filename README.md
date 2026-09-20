@@ -26,6 +26,10 @@ Backstop is a consumer purchase-intelligence prototype that inspects a public sh
 - Saved scan-evidence snapshots for newly protected purchases
 - Editable protection dates with deadline recalculation
 - Purchase lifecycle states: active, kept, returned and refunded
+- PostgreSQL-backed deadline reminder generation
+- Configurable 3, 7, 14 or 30-day reminder windows
+- In-app notification center with unread/read state
+- Optional browser desktop alerts while Backstop is open
 
 ## Run locally
 
@@ -100,6 +104,16 @@ Deadline calculation is repeated server-side before persistence. The frontend st
 
 This client UUID is **not authentication** and is not a security boundary. Real accounts remain a later production step.
 
+## Deadline reminders
+
+Backstop generates reminders from persisted return, warranty and renewal deadlines when those deadlines enter the configured reminder window.
+
+The default reminder window is 7 days and can be changed from the notification center to 3, 7, 14 or 30 days. Reminder records, read state and desktop-delivery state are stored in PostgreSQL.
+
+The browser polls the notification API once per minute while Backstop is open. Desktop alerts use the browser Notification API and therefore require explicit browser permission. This local build does not yet use service workers or web push, so desktop alerts are not delivered while Backstop is completely closed.
+
+Date or lifecycle changes invalidate stale unread reminders before new ones are generated.
+
 ## Main files
 
 - `server/scanner.ts` - scan orchestration and scoring
@@ -107,6 +121,8 @@ This client UUID is **not authentication** and is not a security boundary. Real 
 - `server/db/migrate.ts` - SQL migration runner
 - `server/protectionRepository.ts` - PostgreSQL persistence layer
 - `server/protectionRoutes.ts` - protection API
+- `server/notificationRepository.ts` - reminder generation and notification persistence
+- `server/notificationRoutes.ts` - notification API
 - `server/browserFetch.ts` - restricted Chromium-rendered fallback
 - `server/domainIntelligence.ts` - RDAP, DNS and TLS evidence
 - `server/threatIntelligence.ts` - Google Web Risk adapter
@@ -114,9 +130,13 @@ This client UUID is **not authentication** and is not a security boundary. Real 
 - `src/mappers/scanMapper.ts` - API-to-UI transformation
 - `src/services/scanService.ts` - scanner client
 - `src/services/protectionService.ts` - protection API client, UI hydration and legacy localStorage migration
+- `src/services/backstopApi.ts` - shared browser API client and anonymous client identity
+- `src/services/notificationService.ts` - reminder API client
+- `src/mappers/notificationMapper.ts` - raw reminder data to UI copy/state
 - `src/components/ProtectionDrawer.tsx` - protection setup
 - `src/components/Dashboard.tsx` - saved purchase dashboard
 - `src/components/ProtectedPurchaseDetail.tsx` - purchase timeline, evidence and lifecycle actions
+- `src/components/NotificationCenter.tsx` - reminder bell, settings and notification feed
 - `src/components/RiskMeter.tsx` - explainable risk breakdown
 
 ## Architecture notes
@@ -128,7 +148,7 @@ The Chromium fallback is conditional and restricted: public HTTP(S) network targ
 ## Next logical build steps
 
 1. Authentication and mapping the local client namespace to real user accounts
-2. Notification scheduling for upcoming deadlines
+2. Service-worker/web-push delivery when Backstop is closed
 3. Receipt and email ingestion
 4. Dispute/refund workflow using saved evidence
 5. Historical pricing data
