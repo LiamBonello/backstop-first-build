@@ -6,6 +6,7 @@ import Inventory2RoundedIcon from '@mui/icons-material/Inventory2Rounded';
 import KeyboardReturnRoundedIcon from '@mui/icons-material/KeyboardReturnRounded';
 import PaidRoundedIcon from '@mui/icons-material/PaidRounded';
 import ReplayRoundedIcon from '@mui/icons-material/ReplayRounded';
+import ScheduleRoundedIcon from '@mui/icons-material/ScheduleRounded';
 import ShieldRoundedIcon from '@mui/icons-material/ShieldRounded';
 import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 
@@ -587,6 +588,14 @@ export function ProtectedPurchaseDetail({
                       {item.state ===
                       'expired' ? (
                         <WarningAmberRoundedIcon
+                          sx={{
+                            fontSize:
+                              16,
+                          }}
+                        />
+                      ) : item.state ===
+                        'upcoming' ? (
+                        <ScheduleRoundedIcon
                           sx={{
                             fontSize:
                               16,
