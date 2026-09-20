@@ -373,6 +373,12 @@ export const mapScanResponse = (
     product:
       dto.productName,
 
+    amount:
+      dto.amount,
+
+    currency:
+      dto.currency,
+
     amountLabel:
       canFormatMoney
         ? formatMoney(
@@ -422,6 +428,22 @@ export const mapScanResponse = (
       ),
 
     protection: {
+      returnWindowDays:
+        dto.protection
+          .returnWindowDays,
+
+      warrantyMonths:
+        dto.protection
+          .warrantyMonths,
+
+      renewalAmount:
+        dto.protection
+          .renewalAmount,
+
+      renewalInterval:
+        dto.protection
+          .renewalIntervalLabel,
+
       returnWindowLabel:
         dto.protection
           .returnWindowDays !==
