@@ -6,6 +6,8 @@ export const DEMO_URL =
 export const demoScanResponse: RawScanResponseDto = {
   scanId: 'scan_demo_001',
 
+  scanMethod: 'STATIC_HTML',
+
   merchantName: 'NovaLume',
 
   merchantDomain: 'novalume-store.com',
