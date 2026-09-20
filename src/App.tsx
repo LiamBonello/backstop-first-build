@@ -25,6 +25,10 @@ import {
 } from './components/HeroScanner';
 
 import {
+  ProtectedPurchaseDetail,
+} from './components/ProtectedPurchaseDetail';
+
+import {
   ScanResult,
 } from './components/ScanResult';
 
@@ -52,13 +56,15 @@ import {
 import type {
   ProtectedPurchase,
   ProtectionInput,
+  PurchaseLifecycleStatus,
   PurchaseScan,
 } from './types/purchase';
 
 type View =
   | 'home'
   | 'result'
-  | 'dashboard';
+  | 'dashboard'
+  | 'purchase';
 
 export default function App() {
   const [
@@ -91,6 +97,13 @@ export default function App() {
   );
 
   const [
+    selectedPurchaseId,
+    setSelectedPurchaseId,
+  ] = useState<string | null>(
+    null,
+  );
+
+  const [
     toastOpen,
     setToastOpen,
   ] = useState(false);
@@ -116,6 +129,15 @@ export default function App() {
     getDashboardMetrics(
       protectedPurchases,
     );
+
+  const selectedPurchase =
+    selectedPurchaseId
+      ? protectedPurchases.find(
+          (purchase) =>
+            purchase.id ===
+            selectedPurchaseId,
+        ) ?? null
+      : null;
 
   const handleScan = async (
     url: string,
@@ -195,11 +217,97 @@ export default function App() {
           id,
         ),
       );
+
+      if (
+        selectedPurchaseId ===
+        id
+      ) {
+        setSelectedPurchaseId(
+          null,
+        );
+
+        setView(
+          'dashboard',
+        );
+      }
     } catch (error) {
       setScanError(
         error instanceof Error
           ? error.message
           : 'Backstop could not remove this protected purchase.',
+      );
+    }
+  };
+
+  const handleOpenPurchase = (
+    id: string,
+  ) => {
+    setProtectedPurchases(
+      protectionService.list(),
+    );
+
+    setSelectedPurchaseId(
+      id,
+    );
+
+    setView(
+      'purchase',
+    );
+
+    window.scrollTo({
+      top: 0,
+      behavior:
+        'smooth',
+    });
+  };
+
+  const handleUpdatePurchaseDates = (
+    input: ProtectionInput,
+  ) => {
+    if (!selectedPurchaseId) {
+      return;
+    }
+
+    try {
+      protectionService.updateDates(
+        selectedPurchaseId,
+        input,
+      );
+
+      setProtectedPurchases(
+        protectionService.list(),
+      );
+    } catch (error) {
+      setScanError(
+        error instanceof Error
+          ? error.message
+          : 'Backstop could not update the purchase dates.',
+      );
+    }
+  };
+
+  const handleLifecycleChange = (
+    status:
+      PurchaseLifecycleStatus,
+  ) => {
+    if (!selectedPurchaseId) {
+      return;
+    }
+
+    try {
+      protectionService.setLifecycle(
+        selectedPurchaseId,
+        status,
+      );
+
+      setProtectedPurchases(
+        protectionService.list(),
+      );
+    } catch (error) {
+      setScanError(
+        error instanceof Error
+          ? error.message
+          : 'Backstop could not update this purchase status.',
       );
     }
   };
@@ -219,6 +327,10 @@ export default function App() {
   const goDashboard = () => {
     setProtectedPurchases(
       protectionService.list(),
+    );
+
+    setSelectedPurchaseId(
+      null,
     );
 
     setView(
@@ -301,6 +413,30 @@ export default function App() {
         )}
 
         {view ===
+          'purchase' &&
+          selectedPurchase && (
+          <ProtectedPurchaseDetail
+            purchase={
+              selectedPurchase
+            }
+            onBack={
+              goDashboard
+            }
+            onUpdateDates={
+              handleUpdatePurchaseDates
+            }
+            onLifecycleChange={
+              handleLifecycleChange
+            }
+            onDelete={() =>
+              handleRemovePurchase(
+                selectedPurchase.id,
+              )
+            }
+          />
+        )}
+
+        {view ===
           'dashboard' && (
           <Dashboard
             purchases={
@@ -311,6 +447,9 @@ export default function App() {
             }
             onRemovePurchase={
               handleRemovePurchase
+            }
+            onOpenPurchase={
+              handleOpenPurchase
             }
             onBack={() =>
               setView(
