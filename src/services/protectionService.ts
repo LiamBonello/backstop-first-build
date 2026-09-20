@@ -1,3 +1,7 @@
+import {
+  backstopRequestJson,
+} from './backstopApi';
+
 import type {
   CreateProtectedPurchaseRequestDto,
   DashboardMetric,
@@ -11,170 +15,11 @@ import type {
   PurchaseScan,
 } from '../types/purchase';
 
-const apiBaseUrl =
-  (
-    import.meta.env
-      .VITE_API_BASE_URL ??
-    ''
-  ).replace(
-    /\/$/,
-    '',
-  );
-
-const CLIENT_ID_KEY =
-  'backstop.client-id.v1';
-
 const LEGACY_STORAGE_KEY =
   'backstop.protected-purchases.v1';
 
 const MIGRATION_KEY =
   'backstop.postgres-migration.v1';
-
-interface LegacyProtectedPurchaseV1 {
-  version: 1;
-  id: string;
-  sourceScanId: string;
-  merchant: string;
-  domain: string;
-  product: string;
-  amount: number | null;
-  currency: string | null;
-  amountLabel: string;
-  purchaseDate: string;
-  deliveryDate: string | null;
-  returnDeadline: string | null;
-  warrantyDeadline: string | null;
-  renewalDeadline: string | null;
-  createdAtIso: string;
-}
-
-interface LegacyProtectedPurchaseV2 {
-  version: 2;
-  id: string;
-  sourceScanId: string;
-  merchant: string;
-  domain: string;
-  product: string;
-  amount: number | null;
-  currency: string | null;
-  amountLabel: string;
-  purchaseDate: string;
-  deliveryDate: string | null;
-  returnDeadline: string | null;
-  warrantyDeadline: string | null;
-  renewalDeadline: string | null;
-  protectionTerms: ProtectionTermsDto;
-  lifecycleStatus: PurchaseLifecycleStatus;
-  lifecycleUpdatedAtIso: string | null;
-  evidenceSnapshot: ProtectionEvidenceSnapshot | null;
-  createdAtIso: string;
-}
-
-interface DeadlineEntry {
-  kind:
-    | 'Return'
-    | 'Warranty'
-    | 'Renewal';
-  date: string;
-}
-
-const lifecycleLabels: Record<
-  PurchaseLifecycleStatus,
-  string
-> = {
-  active:
-    'Active protection',
-  kept:
-    'Kept',
-  returned:
-    'Returned',
-  refunded:
-    'Refunded',
-};
-
-const getClientId = (): string => {
-  const existing =
-    window.localStorage.getItem(
-      CLIENT_ID_KEY,
-    );
-
-  if (existing) {
-    return existing;
-  }
-
-  const created =
-    crypto.randomUUID();
-
-  window.localStorage.setItem(
-    CLIENT_ID_KEY,
-    created,
-  );
-
-  return created;
-};
-
-const requestJson = async <T>(
-  path: string,
-  init?: RequestInit,
-): Promise<T> => {
-  const headers =
-    new Headers(
-      init?.headers,
-    );
-
-  headers.set(
-    'content-type',
-    'application/json',
-  );
-
-  headers.set(
-    'x-backstop-client-id',
-    getClientId(),
-  );
-
-  const response =
-    await fetch(
-      `${apiBaseUrl}${path}`,
-      {
-        ...init,
-        headers,
-      },
-    );
-
-  if (!response.ok) {
-    let message =
-      'Backstop could not complete the protection request.';
-
-    try {
-      const payload =
-        await response.json() as {
-          error?: unknown;
-        };
-
-      if (
-        typeof payload.error ===
-        'string'
-      ) {
-        message =
-          payload.error;
-      }
-    } catch {
-      // Some error responses may not contain JSON.
-    }
-
-    throw new Error(
-      message,
-    );
-  }
-
-  if (
-    response.status === 204
-  ) {
-    return undefined as T;
-  }
-
-  return await response.json() as T;
-};
 
 const isDateOnly = (
   value: unknown,
@@ -1561,7 +1406,7 @@ const migrateLegacyStorage = async (): Promise<void> => {
   if (
     records.length > 0
   ) {
-    await requestJson<void>(
+    await backstopRequestJson<void>(
       '/api/protection/import',
       {
         method:
@@ -1625,7 +1470,7 @@ export const protectionService = {
     await migrateLegacyStorage();
 
     const response =
-      await requestJson<{
+      await backstopRequestJson<{
         records:
           ProtectedPurchaseRecordDto[];
       }>(
@@ -1644,7 +1489,7 @@ export const protectionService = {
     input: ProtectionInput,
   ): Promise<ProtectedPurchase> {
     const record =
-      await requestJson<ProtectedPurchaseRecordDto>(
+      await backstopRequestJson<ProtectedPurchaseRecordDto>(
         '/api/protection',
         {
           method:
@@ -1669,7 +1514,7 @@ export const protectionService = {
     input: ProtectionInput,
   ): Promise<ProtectedPurchase> {
     const record =
-      await requestJson<ProtectedPurchaseRecordDto>(
+      await backstopRequestJson<ProtectedPurchaseRecordDto>(
         `/api/protection/${encodeURIComponent(
           id,
         )}/dates`,
@@ -1694,7 +1539,7 @@ export const protectionService = {
       PurchaseLifecycleStatus,
   ): Promise<ProtectedPurchase> {
     const record =
-      await requestJson<ProtectedPurchaseRecordDto>(
+      await backstopRequestJson<ProtectedPurchaseRecordDto>(
         `/api/protection/${encodeURIComponent(
           id,
         )}/lifecycle`,
@@ -1716,7 +1561,7 @@ export const protectionService = {
   async remove(
     id: string,
   ): Promise<void> {
-    await requestJson<void>(
+    await backstopRequestJson<void>(
       `/api/protection/${encodeURIComponent(
         id,
       )}`,
