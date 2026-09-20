@@ -1549,6 +1549,16 @@ const migrateLegacyStorage = async (): Promise<void> => {
     );
 
   if (
+    parsed.length > 0 &&
+    records.length !==
+      parsed.length
+  ) {
+    throw new Error(
+      'Backstop found legacy protection data that could not be migrated safely. The original browser data has been preserved.',
+    );
+  }
+
+  if (
     records.length > 0
   ) {
     await requestJson<void>(
