@@ -1,4 +1,15 @@
-export type Severity = 'critical' | 'warning' | 'positive' | 'neutral';
+export type Severity =
+  | 'critical'
+  | 'warning'
+  | 'positive'
+  | 'neutral';
+
+export type SignalId =
+  | 'identity'
+  | 'pricing'
+  | 'returns'
+  | 'commitment'
+  | 'protection';
 
 export interface RawFindingDto {
   id: string;
@@ -6,27 +17,58 @@ export interface RawFindingDto {
   headline: string;
   detail: string;
   sourceLabel: string;
-  severityCode: 'HIGH' | 'MEDIUM' | 'GOOD' | 'INFO';
+  sourceUrl: string | null;
+
+  severityCode:
+    | 'HIGH'
+    | 'MEDIUM'
+    | 'GOOD'
+    | 'INFO';
+}
+
+export interface RawSignalDto {
+  id: SignalId;
+  label: string;
+  scorePercent: number;
+  statusLabel: string;
 }
 
 export interface RawScanResponseDto {
   scanId: string;
+
   merchantName: string;
   merchantDomain: string;
+
   productName: string;
-  currency: string;
-  amount: number;
+
+  currency: string | null;
+  amount: number | null;
+
   confidencePercent: number;
   riskPercent: number;
+
   verdict: string;
+
   scannedAtIso: string;
+
+  signals: RawSignalDto[];
   findings: RawFindingDto[];
+
   protection: {
-    returnDeadlineIso: string;
-    warrantyMonths: number;
-    renewalAmount: number | null;
-    renewalIso: string | null;
-    estimatedMoneyAtRisk: number;
+    returnWindowDays:
+      number | null;
+
+    warrantyMonths:
+      number | null;
+
+    renewalAmount:
+      number | null;
+
+    renewalIntervalLabel:
+      string | null;
+
+    estimatedMoneyAtRisk:
+      number | null;
   };
 }
 
@@ -35,43 +77,75 @@ export interface Finding {
   category: string;
   title: string;
   detail: string;
+
   sourceLabel: string;
+  sourceUrl: string | null;
+
   severity: Severity;
 }
 
+export interface ScanSignal {
+  id: SignalId;
+  label: string;
+  score: number;
+  statusLabel: string;
+}
+
 export interface PurchaseProtection {
-  returnDeadlineLabel: string;
+  returnWindowLabel: string;
   warrantyLabel: string;
-  renewalLabel: string | null;
+
+  renewalLabel:
+    string | null;
+
   moneyAtRiskLabel: string;
 }
 
 export interface PurchaseScan {
   id: string;
+
   merchant: string;
   domain: string;
   product: string;
+
   amountLabel: string;
+
   confidence: number;
   risk: number;
+
   verdict: string;
+
   scannedAtLabel: string;
+
+  signals: ScanSignal[];
   findings: Finding[];
-  protection: PurchaseProtection;
+
+  protection:
+    PurchaseProtection;
 }
 
 export interface ProtectedPurchase {
   id: string;
   merchant: string;
   product: string;
+
   amountLabel: string;
+
   nextDeadlineLabel: string;
-  status: 'protected' | 'attention';
+
+  status:
+    | 'protected'
+    | 'attention';
 }
 
 export interface DashboardMetric {
   id: string;
   label: string;
   value: string;
-  icon: 'shield' | 'value' | 'deadline' | 'recovered';
+
+  icon:
+    | 'shield'
+    | 'value'
+    | 'deadline'
+    | 'recovered';
 }

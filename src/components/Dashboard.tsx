@@ -1,14 +1,21 @@
-import AddRoundedIcon from '@mui/icons-material/AddRounded';
-import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
-import BoltRoundedIcon from '@mui/icons-material/BoltRounded';
-import CalendarMonthRoundedIcon from '@mui/icons-material/CalendarMonthRounded';
-import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
-import SavingsOutlinedIcon from '@mui/icons-material/SavingsOutlined';
-import ShieldRoundedIcon from '@mui/icons-material/ShieldRounded';
-import { Box, Button, Chip, Stack, Typography } from '@mui/material';
-import { alpha } from '@mui/material/styles';
-import { demoDashboardMetrics, demoProtectedPurchases } from '../mocks/dashboard';
-import type { DashboardMetric, ProtectedPurchase, PurchaseScan } from '../types/purchase';
+import AddRoundedIcon from "@mui/icons-material/AddRounded";
+import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
+import BoltRoundedIcon from "@mui/icons-material/BoltRounded";
+import CalendarMonthRoundedIcon from "@mui/icons-material/CalendarMonthRounded";
+import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
+import SavingsOutlinedIcon from "@mui/icons-material/SavingsOutlined";
+import ShieldRoundedIcon from "@mui/icons-material/ShieldRounded";
+import { Box, Button, Chip, Stack, Typography } from "@mui/material";
+import { alpha } from "@mui/material/styles";
+import {
+  demoDashboardMetrics,
+  demoProtectedPurchases,
+} from "../mocks/dashboard";
+import type {
+  DashboardMetric,
+  ProtectedPurchase,
+  PurchaseScan,
+} from "../types/purchase";
 
 interface DashboardProps {
   scan: PurchaseScan | null;
@@ -17,7 +24,12 @@ interface DashboardProps {
   onScanNew: () => void;
 }
 
-export function Dashboard({ scan, protectedPurchase, onBack, onScanNew }: DashboardProps) {
+export function Dashboard({
+  scan,
+  protectedPurchase,
+  onBack,
+  onScanNew,
+}: DashboardProps) {
   const purchases: ProtectedPurchase[] = [
     ...(protectedPurchase && scan
       ? [
@@ -26,8 +38,8 @@ export function Dashboard({ scan, protectedPurchase, onBack, onScanNew }: Dashbo
             merchant: scan.merchant,
             product: scan.product,
             amountLabel: scan.amountLabel,
-            nextDeadlineLabel: `Return window · ${scan.protection.returnDeadlineLabel}`,
-            status: 'attention' as const,
+            nextDeadlineLabel: `Return terms · ${scan.protection.returnWindowLabel}`,
+            status: "protected" as const,
           },
         ]
       : []),
@@ -35,26 +47,40 @@ export function Dashboard({ scan, protectedPurchase, onBack, onScanNew }: Dashbo
   ];
 
   const metrics: DashboardMetric[] = demoDashboardMetrics.map((metric) =>
-    metric.id === 'protected' ? { ...metric, value: String(purchases.length) } : metric,
+    metric.id === "protected"
+      ? { ...metric, value: String(purchases.length) }
+      : metric,
   );
 
-  const metricIcons: Record<DashboardMetric['icon'], typeof ShieldRoundedIcon> = {
-    shield: ShieldRoundedIcon,
-    value: SavingsOutlinedIcon,
-    deadline: CalendarMonthRoundedIcon,
-    recovered: BoltRoundedIcon,
-  };
+  const metricIcons: Record<DashboardMetric["icon"], typeof ShieldRoundedIcon> =
+    {
+      shield: ShieldRoundedIcon,
+      value: SavingsOutlinedIcon,
+      deadline: CalendarMonthRoundedIcon,
+      recovered: BoltRoundedIcon,
+    };
 
   return (
-    <Box sx={{ maxWidth: 1180, mx: 'auto', px: { xs: 2, md: 4 }, py: { xs: 5, md: 8 } }}>
-      <Button startIcon={<ArrowBackRoundedIcon />} onClick={onBack} sx={{ color: 'text.secondary', ml: -1 }}>
+    <Box
+      sx={{
+        maxWidth: 1180,
+        mx: "auto",
+        px: { xs: 2, md: 4 },
+        py: { xs: 5, md: 8 },
+      }}
+    >
+      <Button
+        startIcon={<ArrowBackRoundedIcon />}
+        onClick={onBack}
+        sx={{ color: "text.secondary", ml: -1 }}
+      >
         Back
       </Button>
 
       <Stack
-        direction={{ xs: 'column', sm: 'row' }}
+        direction={{ xs: "column", sm: "row" }}
         justifyContent="space-between"
-        alignItems={{ xs: 'stretch', sm: 'flex-end' }}
+        alignItems={{ xs: "stretch", sm: "flex-end" }}
         gap={2}
         sx={{ mt: 3 }}
       >
@@ -63,13 +89,17 @@ export function Dashboard({ scan, protectedPurchase, onBack, onScanNew }: Dashbo
             size="small"
             icon={<ShieldRoundedIcon />}
             label="Protection center"
-            sx={{ color: '#A8F4DF', bgcolor: alpha('#61F4D5', 0.055) }}
+            sx={{ color: "#A8F4DF", bgcolor: alpha("#61F4D5", 0.055) }}
           />
-          <Typography variant="h2" sx={{ mt: 2, fontSize: { xs: '2.5rem', md: '3.7rem' } }}>
+          <Typography
+            variant="h2"
+            sx={{ mt: 2, fontSize: { xs: "2.5rem", md: "3.7rem" } }}
+          >
             Your money has a memory now.
           </Typography>
           <Typography color="text.secondary" sx={{ mt: 1, maxWidth: 620 }}>
-            The purchases, obligations and deadlines worth remembering, without relying on your inbox or your memory.
+            The purchases, obligations and deadlines worth remembering, without
+            relying on your inbox or your memory.
           </Typography>
         </Box>
         <Button
@@ -78,8 +108,8 @@ export function Dashboard({ scan, protectedPurchase, onBack, onScanNew }: Dashbo
           onClick={onScanNew}
           sx={{
             height: 48,
-            color: '#07100D',
-            background: 'linear-gradient(110deg, #B89EFF, #6AF3D7)',
+            color: "#07100D",
+            background: "linear-gradient(110deg, #B89EFF, #6AF3D7)",
           }}
         >
           Scan a purchase
@@ -89,8 +119,8 @@ export function Dashboard({ scan, protectedPurchase, onBack, onScanNew }: Dashbo
       <Box
         sx={{
           mt: 5,
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr 1fr', lg: 'repeat(4, 1fr)' },
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr 1fr", lg: "repeat(4, 1fr)" },
           gap: 1.4,
         }}
       >
@@ -102,12 +132,19 @@ export function Dashboard({ scan, protectedPurchase, onBack, onScanNew }: Dashbo
               sx={{
                 p: { xs: 2, md: 2.4 },
                 borderRadius: 4,
-                bgcolor: alpha('#0D1016', 0.72),
-                border: `1px solid ${alpha('#ffffff', 0.07)}`,
+                bgcolor: alpha("#0D1016", 0.72),
+                border: `1px solid ${alpha("#ffffff", 0.07)}`,
               }}
             >
-              <Icon sx={{ color: 'primary.main', fontSize: 20 }} />
-              <Typography sx={{ mt: 2, fontFamily: 'Manrope', fontWeight: 700, fontSize: { xs: '1.6rem', md: '2rem' } }}>
+              <Icon sx={{ color: "primary.main", fontSize: 20 }} />
+              <Typography
+                sx={{
+                  mt: 2,
+                  fontFamily: "Manrope",
+                  fontWeight: 700,
+                  fontSize: { xs: "1.6rem", md: "2rem" },
+                }}
+              >
                 {stat.value}
               </Typography>
               <Typography variant="caption" color="text.secondary">
@@ -118,9 +155,14 @@ export function Dashboard({ scan, protectedPurchase, onBack, onScanNew }: Dashbo
         })}
       </Box>
 
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mt: 6, mb: 2 }}>
+      <Stack
+        direction="row"
+        justifyContent="space-between"
+        alignItems="center"
+        sx={{ mt: 6, mb: 2 }}
+      >
         <Box>
-          <Typography variant="h3" sx={{ fontSize: '1.6rem' }}>
+          <Typography variant="h3" sx={{ fontSize: "1.6rem" }}>
             Protected purchases
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
@@ -133,18 +175,18 @@ export function Dashboard({ scan, protectedPurchase, onBack, onScanNew }: Dashbo
         {purchases.map((purchase) => (
           <Stack
             key={purchase.id}
-            direction={{ xs: 'column', sm: 'row' }}
-            alignItems={{ xs: 'flex-start', sm: 'center' }}
+            direction={{ xs: "column", sm: "row" }}
+            alignItems={{ xs: "flex-start", sm: "center" }}
             spacing={2}
             sx={{
               p: 2.2,
               borderRadius: 4,
-              bgcolor: alpha('#0D1016', 0.68),
-              border: `1px solid ${alpha('#ffffff', 0.065)}`,
-              transition: 'transform .2s ease, border-color .2s ease',
-              '&:hover': {
-                transform: 'translateY(-2px)',
-                borderColor: alpha('#9D7BFF', 0.18),
+              bgcolor: alpha("#0D1016", 0.68),
+              border: `1px solid ${alpha("#ffffff", 0.065)}`,
+              transition: "transform .2s ease, border-color .2s ease",
+              "&:hover": {
+                transform: "translateY(-2px)",
+                borderColor: alpha("#9D7BFF", 0.18),
               },
             }}
           >
@@ -152,17 +194,24 @@ export function Dashboard({ scan, protectedPurchase, onBack, onScanNew }: Dashbo
               sx={{
                 width: 44,
                 height: 44,
-                borderRadius: '14px',
-                display: 'grid',
-                placeItems: 'center',
-                color: purchase.status === 'attention' ? 'warning.main' : 'secondary.main',
+                borderRadius: "14px",
+                display: "grid",
+                placeItems: "center",
+                color:
+                  purchase.status === "attention"
+                    ? "warning.main"
+                    : "secondary.main",
                 bgcolor:
-                  purchase.status === 'attention'
-                    ? alpha('#FFCA68', 0.07)
-                    : alpha('#61F4D5', 0.07),
+                  purchase.status === "attention"
+                    ? alpha("#FFCA68", 0.07)
+                    : alpha("#61F4D5", 0.07),
               }}
             >
-              {purchase.status === 'attention' ? <CalendarMonthRoundedIcon /> : <CheckCircleRoundedIcon />}
+              {purchase.status === "attention" ? (
+                <CalendarMonthRoundedIcon />
+              ) : (
+                <CheckCircleRoundedIcon />
+              )}
             </Box>
             <Box sx={{ flex: 1 }}>
               <Typography variant="caption" color="text.secondary">
@@ -170,9 +219,16 @@ export function Dashboard({ scan, protectedPurchase, onBack, onScanNew }: Dashbo
               </Typography>
               <Typography fontWeight={700}>{purchase.product}</Typography>
             </Box>
-            <Box sx={{ textAlign: { xs: 'left', sm: 'right' } }}>
+            <Box sx={{ textAlign: { xs: "left", sm: "right" } }}>
               <Typography fontWeight={700}>{purchase.amountLabel}</Typography>
-              <Typography variant="caption" color={purchase.status === 'attention' ? 'warning.main' : 'text.secondary'}>
+              <Typography
+                variant="caption"
+                color={
+                  purchase.status === "attention"
+                    ? "warning.main"
+                    : "text.secondary"
+                }
+              >
                 {purchase.nextDeadlineLabel}
               </Typography>
             </Box>
