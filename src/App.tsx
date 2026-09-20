@@ -5,6 +5,7 @@ import {
 } from '@mui/material';
 
 import {
+  useEffect,
   useState,
 } from 'react';
 
@@ -91,10 +92,7 @@ export default function App() {
     setProtectedPurchases,
   ] = useState<
     ProtectedPurchase[]
-  >(
-    () =>
-      protectionService.list(),
-  );
+  >([]);
 
   const [
     selectedPurchaseId,
@@ -139,6 +137,52 @@ export default function App() {
         ) ?? null
       : null;
 
+
+  const refreshProtectedPurchases =
+    async (): Promise<ProtectedPurchase[]> => {
+      const purchases =
+        await protectionService.list();
+
+      setProtectedPurchases(
+        purchases,
+      );
+
+      return purchases;
+    };
+
+  useEffect(() => {
+    let cancelled =
+      false;
+
+    protectionService
+      .list()
+      .then(
+        (purchases) => {
+          if (!cancelled) {
+            setProtectedPurchases(
+              purchases,
+            );
+          }
+        },
+      )
+      .catch(
+        (error: unknown) => {
+          if (!cancelled) {
+            setScanError(
+              error instanceof Error
+                ? error.message
+                : 'Backstop could not load the local protection database.',
+            );
+          }
+        },
+      );
+
+    return () => {
+      cancelled =
+        true;
+    };
+  }, []);
+
   const handleScan = async (
     url: string,
   ) => {
@@ -181,7 +225,7 @@ export default function App() {
     }
   };
 
-  const handleProtect = (
+  const handleProtect = async (
     input: ProtectionInput,
   ) => {
     if (!scan) {
@@ -189,14 +233,12 @@ export default function App() {
     }
 
     try {
-      protectionService.protect(
+      await protectionService.protect(
         scan,
         input,
       );
 
-      setProtectedPurchases(
-        protectionService.list(),
-      );
+      await refreshProtectedPurchases();
 
       setToastOpen(true);
     } catch (error) {
@@ -208,15 +250,15 @@ export default function App() {
     }
   };
 
-  const handleRemovePurchase = (
+  const handleRemovePurchase = async (
     id: string,
   ) => {
     try {
-      setProtectedPurchases(
-        protectionService.remove(
-          id,
-        ),
+      await protectionService.remove(
+        id,
       );
+
+      await refreshProtectedPurchases();
 
       if (
         selectedPurchaseId ===
@@ -242,10 +284,6 @@ export default function App() {
   const handleOpenPurchase = (
     id: string,
   ) => {
-    setProtectedPurchases(
-      protectionService.list(),
-    );
-
     setSelectedPurchaseId(
       id,
     );
@@ -261,7 +299,7 @@ export default function App() {
     });
   };
 
-  const handleUpdatePurchaseDates = (
+  const handleUpdatePurchaseDates = async (
     input: ProtectionInput,
   ) => {
     if (!selectedPurchaseId) {
@@ -269,14 +307,12 @@ export default function App() {
     }
 
     try {
-      protectionService.updateDates(
+      await protectionService.updateDates(
         selectedPurchaseId,
         input,
       );
 
-      setProtectedPurchases(
-        protectionService.list(),
-      );
+      await refreshProtectedPurchases();
     } catch (error) {
       setScanError(
         error instanceof Error
@@ -286,7 +322,7 @@ export default function App() {
     }
   };
 
-  const handleLifecycleChange = (
+  const handleLifecycleChange = async (
     status:
       PurchaseLifecycleStatus,
   ) => {
@@ -295,14 +331,12 @@ export default function App() {
     }
 
     try {
-      protectionService.setLifecycle(
+      await protectionService.setLifecycle(
         selectedPurchaseId,
         status,
       );
 
-      setProtectedPurchases(
-        protectionService.list(),
-      );
+      await refreshProtectedPurchases();
     } catch (error) {
       setScanError(
         error instanceof Error
@@ -325,8 +359,14 @@ export default function App() {
   };
 
   const goDashboard = () => {
-    setProtectedPurchases(
-      protectionService.list(),
+    void refreshProtectedPurchases().catch(
+      (error: unknown) => {
+        setScanError(
+          error instanceof Error
+            ? error.message
+            : 'Backstop could not refresh the local protection database.',
+        );
+      },
     );
 
     setSelectedPurchaseId(
@@ -503,7 +543,7 @@ export default function App() {
               '#C9FFEF',
           }}
         >
-          Purchase protected. Backstop is now tracking the calculated deadlines on this device.
+          Purchase protected. Backstop is now tracking the calculated deadlines in your local database.
         </Alert>
       </Snackbar>
 
