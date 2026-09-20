@@ -1,4 +1,5 @@
 import DoneAllRoundedIcon from '@mui/icons-material/DoneAllRounded';
+import DoneRoundedIcon from '@mui/icons-material/DoneRounded';
 import NotificationsActiveRoundedIcon from '@mui/icons-material/NotificationsActiveRounded';
 import NotificationsNoneRoundedIcon from '@mui/icons-material/NotificationsNoneRounded';
 
@@ -111,7 +112,11 @@ export function NotificationCenter({
   return (
     <>
       <Tooltip
-        title="Deadline reminders"
+        title={
+          unreadCount > 0
+            ? `${unreadCount} unread reminder${unreadCount === 1 ? '' : 's'}`
+            : 'Deadline reminders'
+        }
       >
         <IconButton
           aria-label="Open deadline reminders"
@@ -483,6 +488,10 @@ export function NotificationCenter({
                       'pointer',
                     outline:
                       'none',
+                    opacity:
+                      notification.unread
+                        ? 1
+                        : 0.72,
                     bgcolor:
                       notification.unread
                         ? alpha(
@@ -491,7 +500,7 @@ export function NotificationCenter({
                           )
                         : alpha(
                             '#ffffff',
-                            0.018,
+                            0.012,
                           ),
                     border:
                       `1px solid ${alpha(
@@ -528,22 +537,53 @@ export function NotificationCenter({
                   >
                     <Box
                       sx={{
-                        mt: 0.7,
-                        width: 8,
-                        height: 8,
+                        mt: 0.45,
+                        width: 18,
+                        height: 18,
                         flex:
                           '0 0 auto',
+                        display:
+                          'grid',
+                        placeItems:
+                          'center',
                         borderRadius:
                           '50%',
-                        bgcolor:
+                        color:
                           notification.unread
                             ? 'warning.main'
+                            : 'text.secondary',
+                        bgcolor:
+                          notification.unread
+                            ? alpha(
+                                '#FFCA68',
+                                0.08,
+                              )
                             : alpha(
                                 '#ffffff',
-                                0.24,
+                                0.035,
                               ),
                       }}
-                    />
+                    >
+                      {notification.unread ? (
+                        <Box
+                          sx={{
+                            width: 7,
+                            height: 7,
+                            borderRadius:
+                              '50%',
+                            bgcolor:
+                              'warning.main',
+                          }}
+                        />
+                      ) : (
+                        <DoneRoundedIcon
+                          sx={{
+                            fontSize:
+                              13,
+                          }}
+                        />
+                      )}
+                    </Box>
 
                     <Box
                       sx={{
@@ -553,16 +593,48 @@ export function NotificationCenter({
                           1,
                       }}
                     >
-                      <Typography
+                      <Stack
+                        direction="row"
+                        spacing={1}
                         sx={{
-                          fontWeight:
-                            700,
-                          lineHeight:
-                            1.35,
+                          alignItems:
+                            'center',
+                          justifyContent:
+                            'space-between',
+                          gap: 1,
                         }}
                       >
-                        {notification.title}
-                      </Typography>
+                        <Typography
+                          sx={{
+                            fontWeight:
+                              700,
+                            lineHeight:
+                              1.35,
+                          }}
+                        >
+                          {notification.title}
+                        </Typography>
+
+                        {!notification.unread && (
+                          <Typography
+                            variant="caption"
+                            sx={{
+                              flexShrink:
+                                0,
+                              color:
+                                'text.secondary',
+                              textTransform:
+                                'uppercase',
+                              letterSpacing:
+                                '0.05em',
+                              fontSize:
+                                '0.62rem',
+                            }}
+                          >
+                            Read
+                          </Typography>
+                        )}
+                      </Stack>
 
                       <Typography
                         variant="caption"
