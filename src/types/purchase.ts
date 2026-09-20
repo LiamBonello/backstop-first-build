@@ -94,6 +94,7 @@ export interface RawExternalIntelligenceDto {
 
 export interface RawScanResponseDto {
   scanId: string;
+  scanMethod: 'STATIC_HTML' | 'BROWSER_RENDERED';
 
   merchantName: string;
   merchantDomain: string;
@@ -220,6 +221,7 @@ export interface PurchaseProtection {
 
 export interface PurchaseScan {
   id: string;
+  scanMethod: 'static' | 'browser';
 
   merchant: string;
   domain: string;
