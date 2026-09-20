@@ -251,8 +251,10 @@ async function queryOpenCorporates(
     const payload = asRecord((await response.json()) as unknown);
     const results = payload ? asRecord(payload.results) : null;
 
-    const companies = Array.isArray(results?.companies)
-      ? results.companies
+    const companyEntries = results?.companies;
+
+    const companies = Array.isArray(companyEntries)
+      ? companyEntries
       : [];
 
     let best:
