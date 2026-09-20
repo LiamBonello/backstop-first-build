@@ -279,6 +279,25 @@ export function ScanResult({
                     'text.secondary',
                 }}
               />
+
+              {scan.scanMethod === 'browser' && (
+                <Chip
+                  size="small"
+
+                  label="Browser-rendered fallback"
+
+                  sx={{
+                    color:
+                      'primary.light',
+
+                    bgcolor:
+                      alpha(
+                        '#9D7BFF',
+                        0.07,
+                      ),
+                  }}
+                />
+              )}
             </Stack>
 
             <Typography
