@@ -82,6 +82,7 @@ export function ProtectionDrawer({
   const preview =
     useMemo(
       () =>
+        !purchaseDate ||
         deliveryDateInvalid
           ? null
           : calculateProtectionPreview(
