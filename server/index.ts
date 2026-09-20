@@ -1,4 +1,6 @@
 import express from 'express';
+import { checkDatabaseConnection } from './db/pool';
+import { protectionRouter } from './protectionRoutes';
 import { analyzeUrl } from './scanner';
 import { ScannerError } from './scannerError';
 
@@ -18,19 +20,31 @@ app.disable('x-powered-by');
 
 app.use(
   express.json({
-    limit: '16kb',
+    limit: '512kb',
   }),
 );
 
 app.get(
   '/api/health',
-  (_request, response) => {
+  async (
+    _request,
+    response,
+  ) => {
+    const databaseConnected =
+      await checkDatabaseConnection();
+
     response.json({
       ok: true,
       service:
-        'backstop-scanner',
+        'backstop-api',
+      databaseConnected,
     });
   },
+);
+
+app.use(
+  '/api/protection',
+  protectionRouter,
 );
 
 app.post(
