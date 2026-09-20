@@ -48,6 +48,37 @@ export interface RawDomainIntelligenceDto {
   tlsIssuer: string | null;
 }
 
+export interface RawThreatIntelligenceDto {
+  provider: 'GOOGLE_WEB_RISK';
+  status: 'CLEAR' | 'FLAGGED' | 'NOT_CONFIGURED' | 'UNAVAILABLE';
+  threatTypes: string[];
+  errorLabel: string | null;
+}
+
+export interface RawCompanyIntelligenceDto {
+  publishedLegalName: string | null;
+  publishedCompanyNumber: string | null;
+  publishedVatNumber: string | null;
+  publishedSourceUrl: string | null;
+  registryProvider: 'OPEN_CORPORATES';
+  registryStatus:
+    | 'MATCHED'
+    | 'NO_MATCH'
+    | 'NOT_CONFIGURED'
+    | 'NOT_CHECKED'
+    | 'UNAVAILABLE';
+  matchedLegalName: string | null;
+  matchedCompanyNumber: string | null;
+  matchedJurisdiction: string | null;
+  matchedStatus: string | null;
+  registryUrl: string | null;
+}
+
+export interface RawExternalIntelligenceDto {
+  threat: RawThreatIntelligenceDto;
+  company: RawCompanyIntelligenceDto;
+}
+
 export interface RawScanResponseDto {
   scanId: string;
 
@@ -69,6 +100,7 @@ export interface RawScanResponseDto {
   signals: RawSignalDto[];
   findings: RawFindingDto[];
   domainIntelligence: RawDomainIntelligenceDto;
+  externalIntelligence: RawExternalIntelligenceDto;
 
   protection: {
     returnWindowDays:
@@ -118,6 +150,32 @@ export interface DomainIntelligence {
   tlsState: 'valid' | 'issue' | 'unavailable';
 }
 
+export type IntelligenceTone =
+  | 'positive'
+  | 'warning'
+  | 'critical'
+  | 'neutral';
+
+export interface ThreatIntelligence {
+  statusLabel: string;
+  detailLabel: string;
+  tone: IntelligenceTone;
+}
+
+export interface CompanyIntelligence {
+  publishedIdentityLabel: string;
+  publishedSourceUrl: string | null;
+  registryStatusLabel: string;
+  registryDetailLabel: string;
+  registryUrl: string | null;
+  tone: IntelligenceTone;
+}
+
+export interface ExternalIntelligence {
+  threat: ThreatIntelligence;
+  company: CompanyIntelligence;
+}
+
 export interface PurchaseProtection {
   returnWindowLabel: string;
   warrantyLabel: string;
@@ -147,6 +205,7 @@ export interface PurchaseScan {
   signals: ScanSignal[];
   findings: Finding[];
   domainIntelligence: DomainIntelligence;
+  externalIntelligence: ExternalIntelligence;
 
   protection:
     PurchaseProtection;

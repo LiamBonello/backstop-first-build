@@ -6,8 +6,10 @@ import type {
   RawScanResponseDto,
   RawSignalDto,
 } from "../src/types/purchase";
+import { inspectCompanyIdentity } from "./companyIntelligence";
 import { inspectDomain } from "./domainIntelligence";
 import { fetchHtml } from "./fetchHtml";
+import { inspectThreatIntelligence } from "./threatIntelligence";
 
 const MAIN_PAGE_MAX_BYTES = 10_000_000;
 
@@ -692,10 +694,23 @@ export async function analyzeUrl(
 
   const policyCandidates = discoverPolicies($, page.finalUrl);
 
-  const [policyPages, domainIntelligence] = await Promise.all([
-    fetchPolicyPages(policyCandidates),
-    inspectDomain(page.finalUrl),
-  ]);
+  const [policyPages, domainIntelligence, threatIntelligence] =
+    await Promise.all([
+      fetchPolicyPages(policyCandidates),
+      inspectDomain(page.finalUrl),
+      inspectThreatIntelligence(page.finalUrl),
+    ]);
+
+  const companyIntelligence = await inspectCompanyIdentity({
+    merchantName,
+    mainPageText: mainText,
+    mainPageUrl: page.finalUrl.toString(),
+    policyPages: policyPages.map((policy) => ({
+      label: policy.label,
+      text: policy.text,
+      url: policy.url.toString(),
+    })),
+  });
 
   const policyText = policyPages.map((policy) => policy.text).join(" ");
 
@@ -785,6 +800,10 @@ export async function analyzeUrl(
 
   if (domainIntelligence.tlsAuthorized === false) {
     risk += 18;
+  }
+
+  if (threatIntelligence.status === "FLAGGED") {
+    risk += 55;
   }
 
   if (recurringDetected) {
@@ -908,6 +927,8 @@ export async function analyzeUrl(
         ? 5
         : 0) +
       (domainIntelligence.tlsAuthorized === true ? 15 : 0) +
+      (companyIntelligence.publishedLegalName !== null ? 5 : 0) +
+      (companyIntelligence.registryStatus === "MATCHED" ? 10 : 0) +
       domainAgeIdentityAdjustment,
   );
 
@@ -931,11 +952,13 @@ export async function analyzeUrl(
       "identity",
       "Identity",
       identityScore,
-      identityScore >= 75
-        ? "Strong"
-        : identityScore >= 55
-          ? "Partial"
-          : "Limited",
+      companyIntelligence.registryStatus === "MATCHED"
+        ? "Registry matched"
+        : identityScore >= 75
+          ? "Strong"
+          : identityScore >= 55
+            ? "Partial"
+            : "Limited",
     ),
 
     createSignal(
@@ -1226,6 +1249,57 @@ export async function analyzeUrl(
     severityCode: domainSeverity,
   });
 
+  if (threatIntelligence.status === "FLAGGED") {
+    findings.push({
+      id: "finding_threat",
+      category: "Threat",
+      headline: "Configured threat intelligence returned a match",
+      detail: `Google Web Risk returned the following threat type${threatIntelligence.threatTypes.length === 1 ? "" : "s"}: ${threatIntelligence.threatTypes.join(", ") || "unspecified"}. Treat this as a high-priority security signal.`,
+      sourceLabel: "Google Web Risk",
+      sourceUrl: null,
+      severityCode: "HIGH",
+    });
+  } else if (threatIntelligence.status === "CLEAR") {
+    findings.push({
+      id: "finding_threat",
+      category: "Threat",
+      headline: "No configured threat-list match found",
+      detail:
+        "Google Web Risk returned no match for malware, social-engineering or unwanted-software lists. This does not prove that the merchant or transaction is safe.",
+      sourceLabel: "Google Web Risk",
+      sourceUrl: null,
+      severityCode: "GOOD",
+    });
+  }
+
+  if (
+    companyIntelligence.registryStatus === "MATCHED" &&
+    companyIntelligence.matchedLegalName
+  ) {
+    findings.push({
+      id: "finding_company",
+      category: "Identity",
+      headline: "Published legal entity matched an external registry result",
+      detail: `The merchant pages identify ${companyIntelligence.publishedLegalName ?? "a legal entity"}, and OpenCorporates returned a close registry match for ${companyIntelligence.matchedLegalName}.`,
+      sourceLabel: "Company identity",
+      sourceUrl:
+        companyIntelligence.registryUrl ??
+        companyIntelligence.publishedSourceUrl,
+      severityCode: "GOOD",
+    });
+  } else if (companyIntelligence.registryStatus === "NO_MATCH") {
+    findings.push({
+      id: "finding_company",
+      category: "Identity",
+      headline: "Published legal entity was not independently matched",
+      detail:
+        "Backstop extracted a legal entity from the merchant's own pages, but OpenCorporates did not return a sufficiently close match. Registry coverage and naming differences can cause false negatives, so this is a review signal rather than proof of a problem.",
+      sourceLabel: "Company identity",
+      sourceUrl: companyIntelligence.publishedSourceUrl,
+      severityCode: "INFO",
+    });
+  }
+
   const currency =
     price.currency ?? (price.amount === null ? renewal.currency : null);
 
@@ -1270,6 +1344,11 @@ export async function analyzeUrl(
     findings,
 
     domainIntelligence,
+
+    externalIntelligence: {
+      threat: threatIntelligence,
+      company: companyIntelligence,
+    },
 
     protection: {
       returnWindowDays,

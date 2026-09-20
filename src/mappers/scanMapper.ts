@@ -1,6 +1,9 @@
 import type {
+  CompanyIntelligence,
   DomainIntelligence,
+  ExternalIntelligence,
   Finding,
+  ThreatIntelligence,
   PurchaseScan,
   RawFindingDto,
   RawScanResponseDto,
@@ -105,6 +108,139 @@ const formatDomainAge = (days: number | null): string => {
 
   return `${(days / 365).toFixed(1)} years`;
 };
+
+const mapThreatIntelligence = (
+  dto: RawScanResponseDto['externalIntelligence']['threat'],
+): ThreatIntelligence => {
+  if (dto.status === 'FLAGGED') {
+    return {
+      statusLabel: 'Flagged',
+      detailLabel:
+        dto.threatTypes.length > 0
+          ? `Matched: ${dto.threatTypes.join(', ')}`
+          : 'The configured threat provider returned a match.',
+      tone: 'critical',
+    };
+  }
+
+  if (dto.status === 'CLEAR') {
+    return {
+      statusLabel: 'No list match',
+      detailLabel:
+        'No match was returned for malware, social engineering or unwanted-software lists. This is not proof that the site is safe.',
+      tone: 'positive',
+    };
+  }
+
+  if (dto.status === 'NOT_CONFIGURED') {
+    return {
+      statusLabel: 'Not configured',
+      detailLabel:
+        'Google Web Risk is available as an optional server-side check once an API key is configured.',
+      tone: 'neutral',
+    };
+  }
+
+  return {
+    statusLabel: 'Unavailable',
+    detailLabel:
+      dto.errorLabel ??
+      'The configured threat provider could not be reached for this scan.',
+    tone: 'warning',
+  };
+};
+
+const mapCompanyIntelligence = (
+  dto: RawScanResponseDto['externalIntelligence']['company'],
+): CompanyIntelligence => {
+  const identifiers = [
+    dto.publishedCompanyNumber
+      ? `Company no. ${dto.publishedCompanyNumber}`
+      : null,
+    dto.publishedVatNumber
+      ? `VAT ${dto.publishedVatNumber}`
+      : null,
+  ].filter((value): value is string => value !== null);
+
+  const publishedIdentityLabel = dto.publishedLegalName
+    ? [dto.publishedLegalName, ...identifiers].join(' · ')
+    : identifiers.length > 0
+      ? identifiers.join(' · ')
+      : 'No legal entity was reliably extracted from the inspected pages.';
+
+  if (dto.registryStatus === 'MATCHED') {
+    const matchParts = [
+      dto.matchedLegalName,
+      dto.matchedCompanyNumber
+        ? `no. ${dto.matchedCompanyNumber}`
+        : null,
+      dto.matchedJurisdiction,
+      dto.matchedStatus,
+    ].filter((value): value is string => Boolean(value));
+
+    return {
+      publishedIdentityLabel,
+      publishedSourceUrl: dto.publishedSourceUrl,
+      registryStatusLabel: 'Registry match',
+      registryDetailLabel: matchParts.join(' · ') || 'Registry match found.',
+      registryUrl: dto.registryUrl,
+      tone: 'positive',
+    };
+  }
+
+  if (dto.registryStatus === 'NO_MATCH') {
+    return {
+      publishedIdentityLabel,
+      publishedSourceUrl: dto.publishedSourceUrl,
+      registryStatusLabel: 'No exact match',
+      registryDetailLabel:
+        'OpenCorporates did not return a sufficiently close match for the published legal entity. Coverage and naming differences can cause false negatives.',
+      registryUrl: null,
+      tone: 'warning',
+    };
+  }
+
+  if (dto.registryStatus === 'NOT_CONFIGURED') {
+    return {
+      publishedIdentityLabel,
+      publishedSourceUrl: dto.publishedSourceUrl,
+      registryStatusLabel: 'Registry not configured',
+      registryDetailLabel:
+        'A published legal entity was found, but OpenCorporates is not configured for an independent registry comparison.',
+      registryUrl: null,
+      tone: dto.publishedLegalName ? 'neutral' : 'warning',
+    };
+  }
+
+  if (dto.registryStatus === 'NOT_CHECKED') {
+    return {
+      publishedIdentityLabel,
+      publishedSourceUrl: dto.publishedSourceUrl,
+      registryStatusLabel: 'Not checked',
+      registryDetailLabel:
+        'Backstop needs a published legal entity before attempting a registry match.',
+      registryUrl: null,
+      tone: 'warning',
+    };
+  }
+
+  return {
+    publishedIdentityLabel,
+    publishedSourceUrl: dto.publishedSourceUrl,
+    registryStatusLabel: 'Registry unavailable',
+    registryDetailLabel:
+      'The configured company-registry provider could not complete this lookup.',
+    registryUrl: null,
+    tone: 'warning',
+  };
+};
+
+const mapExternalIntelligence = (
+  dto: RawScanResponseDto['externalIntelligence'],
+): ExternalIntelligence => ({
+  threat: mapThreatIntelligence(dto.threat),
+  company: mapCompanyIntelligence(dto.company),
+});
 
 const mapDomainIntelligence = (
   dto: RawScanResponseDto['domainIntelligence'],
@@ -224,6 +360,11 @@ export const mapScanResponse = (
     domainIntelligence:
       mapDomainIntelligence(
         dto.domainIntelligence,
+      ),
+
+    externalIntelligence:
+      mapExternalIntelligence(
+        dto.externalIntelligence,
       ),
 
     protection: {

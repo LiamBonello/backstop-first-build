@@ -28,6 +28,10 @@ import {
 } from './DomainIntelligenceCard';
 
 import {
+  ExternalIntelligenceCard,
+} from './ExternalIntelligenceCard';
+
+import {
   FindingCard,
 } from './FindingCard';
 
@@ -251,7 +255,7 @@ export function ScanResult({
                   <VerifiedUserOutlinedIcon />
                 }
 
-                label={`${scan.evidenceCoverage}% evidence coverage`}
+                label={`${scan.evidenceCoverage}% core scan coverage`}
 
                 sx={{
                   bgcolor:
@@ -544,6 +548,12 @@ export function ScanResult({
           <DomainIntelligenceCard
             intelligence={
               scan.domainIntelligence
+            }
+          />
+
+          <ExternalIntelligenceCard
+            intelligence={
+              scan.externalIntelligence
             }
           />
 

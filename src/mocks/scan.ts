@@ -72,6 +72,28 @@ export const demoScanResponse: RawScanResponseDto = {
     tlsIssuer: 'Demo CA',
   },
 
+  externalIntelligence: {
+    threat: {
+      provider: 'GOOGLE_WEB_RISK',
+      status: 'NOT_CONFIGURED',
+      threatTypes: [],
+      errorLabel: null,
+    },
+    company: {
+      publishedLegalName: 'NovaLume Commerce Ltd',
+      publishedCompanyNumber: 'NL-2026-0198',
+      publishedVatNumber: 'MT99999999',
+      publishedSourceUrl: null,
+      registryProvider: 'OPEN_CORPORATES',
+      registryStatus: 'NOT_CONFIGURED',
+      matchedLegalName: null,
+      matchedCompanyNumber: null,
+      matchedJurisdiction: null,
+      matchedStatus: null,
+      registryUrl: null,
+    },
+  },
+
   findings: [
     {
       id: 'finding_subscription',
