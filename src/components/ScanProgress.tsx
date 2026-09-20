@@ -190,14 +190,17 @@ export function ScanProgress() {
       >
         <Stack
           direction="row"
-          alignItems="center"
-          justifyContent="space-between"
-          gap={2}
-        >
+          sx={{
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 2
+          }}>
           <Stack
             direction="row"
             spacing={1.4}
-            alignItems="center"
+            sx={{
+              alignItems: "center"
+            }}
           >
             <Box
               sx={{
@@ -319,13 +322,10 @@ export function ScanProgress() {
               </Typography>
 
               <Typography
-                fontWeight={
-                  700
-                }
                 sx={{
-                  mt: 0.2,
-                }}
-              >
+                  fontWeight: 700,
+                  mt: 0.2
+                }}>
                 Investigating the transaction
               </Typography>
             </Box>
@@ -408,11 +408,12 @@ export function ScanProgress() {
                     stage
                   }
                   direction="row"
-                  alignItems="center"
                   spacing={
                     1.2
                   }
                   sx={{
+                    alignItems: "center",
+
                     opacity:
                       complete ||
                       active
@@ -420,9 +421,8 @@ export function ScanProgress() {
                         : 0.48,
 
                     transition:
-                      'opacity .25s ease',
-                  }}
-                >
+                      'opacity .25s ease'
+                  }}>
                   <Typography
                     variant="caption"
                     sx={{
@@ -560,12 +560,12 @@ export function ScanProgress() {
 
         <Typography
           variant="caption"
-          color="text.secondary"
           sx={{
+            color: "text.secondary",
+
             textAlign:
-              'left',
-          }}
-        >
+              'left'
+          }}>
           Some stores block automated inspection or render checkout data only inside a browser. Backstop will tell you when evidence is incomplete.
         </Typography>
       </Stack>

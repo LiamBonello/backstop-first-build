@@ -74,7 +74,12 @@ export function ProtectionDrawer({
         <Typography variant="h3" sx={{ mt: 3, fontSize: "2.2rem" }}>
           Protect this purchase
         </Typography>
-        <Typography color="text.secondary" sx={{ mt: 1.2, lineHeight: 1.65 }}>
+        <Typography
+          sx={{
+            color: "text.secondary",
+            mt: 1.2,
+            lineHeight: 1.65
+          }}>
           Backstop saves the important terms first. Once you add purchase details, those terms can become exact deadlines.
         </Typography>
 
@@ -85,21 +90,24 @@ export function ProtectionDrawer({
               <Stack
                 key={row.label}
                 direction="row"
-                alignItems="center"
                 spacing={1.5}
                 sx={{
+                  alignItems: "center",
                   p: 1.7,
                   borderRadius: 3,
                   bgcolor: alpha("#ffffff", 0.025),
-                  border: `1px solid ${alpha("#ffffff", 0.06)}`,
-                }}
-              >
+                  border: `1px solid ${alpha("#ffffff", 0.06)}`
+                }}>
                 <Icon sx={{ color: "secondary.main", fontSize: 20 }} />
                 <Box sx={{ flex: 1 }}>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" sx={{
+                    color: "text.secondary"
+                  }}>
                     {row.label}
                   </Typography>
-                  <Typography fontWeight={700}>{row.value}</Typography>
+                  <Typography sx={{
+                    fontWeight: 700
+                  }}>{row.value}</Typography>
                 </Box>
               </Stack>
             );
@@ -115,7 +123,9 @@ export function ProtectionDrawer({
             border: `1px solid ${alpha("#FFCA68", 0.14)}`,
           }}
         >
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{
+            color: "text.secondary"
+          }}>
             ESTIMATED EXPOSURE
           </Typography>
           <Typography

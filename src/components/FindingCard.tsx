@@ -157,22 +157,19 @@ export function FindingCard({
       <Stack
         direction="row"
         spacing={1.6}
-        alignItems="flex-start"
-
         onClick={() =>
           setExpanded(
             (value) =>
               !value,
           )
         }
-
         sx={{
+          alignItems: "flex-start",
           p: 2.2,
 
           cursor:
-            'pointer',
-        }}
-      >
+            'pointer'
+        }}>
         <Box
           sx={{
             width:
@@ -229,11 +226,10 @@ export function FindingCard({
                 'column',
               sm: 'row',
             }}
-
-            justifyContent="space-between"
-
-            gap={1}
-          >
+            sx={{
+              justifyContent: "space-between",
+              gap: 1
+            }}>
             <Box>
               <Typography
                 variant="caption"
@@ -310,15 +306,13 @@ export function FindingCard({
             >
               <Typography
                 variant="body2"
-                color="text.secondary"
-
                 sx={{
+                  color: "text.secondary",
                   pt: 1.3,
 
                   lineHeight:
-                    1.65,
-                }}
-              >
+                    1.65
+                }}>
                 {
                   finding.detail
                 }

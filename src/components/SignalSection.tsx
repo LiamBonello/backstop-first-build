@@ -93,13 +93,25 @@ export function SignalSection() {
                   <Icon />
                 </Box>
                 <Box sx={{ flex: 1 }} />
-                <Typography variant="caption" color="text.secondary" sx={{ letterSpacing: '.12em', fontWeight: 700 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    color: "text.secondary",
+                    letterSpacing: '.12em',
+                    fontWeight: 700
+                  }}>
                   {card.eyebrow}
                 </Typography>
                 <Typography variant="h3" sx={{ mt: 0.8, fontSize: '1.55rem' }}>
                   {card.title}
                 </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 1.1, lineHeight: 1.65 }}>
+                <Typography
+                  variant="body2"
+                  sx={{
+                    color: "text.secondary",
+                    mt: 1.1,
+                    lineHeight: 1.65
+                  }}>
                   {card.description}
                 </Typography>
               </Stack>
@@ -108,8 +120,14 @@ export function SignalSection() {
         })}
       </Box>
 
-      <Stack alignItems="center" sx={{ pt: 5 }}>
-        <Typography variant="caption" color="text.secondary">
+      <Stack
+        sx={{
+          alignItems: "center",
+          pt: 5
+        }}>
+        <Typography variant="caption" sx={{
+          color: "text.secondary"
+        }}>
           Backstop is designed to inform your decision, not make it for you.
         </Typography>
       </Stack>

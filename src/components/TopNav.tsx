@@ -23,24 +23,32 @@ export function TopNav({ onDashboard, onHome }: TopNavProps) {
     >
       <Stack
         direction="row"
-        alignItems="center"
-        justifyContent="space-between"
-        sx={{ maxWidth: 1220, mx: 'auto', px: { xs: 2, md: 4 }, height: 76 }}
-      >
+        sx={{
+          alignItems: "center",
+          justifyContent: "space-between",
+          maxWidth: 1220,
+          mx: 'auto',
+          px: { xs: 2, md: 4 },
+          height: 76
+        }}>
         <Stack
           direction="row"
-          alignItems="center"
           spacing={1.2}
           onClick={onHome}
-          sx={{ cursor: 'pointer', userSelect: 'none' }}
-        >
+          sx={{
+            alignItems: "center",
+            cursor: 'pointer',
+            userSelect: 'none'
+          }}>
           <BrandMark />
           <Typography sx={{ fontFamily: 'Manrope', fontWeight: 800, letterSpacing: '-0.04em' }}>
             Backstop
           </Typography>
         </Stack>
 
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack direction="row" spacing={1} sx={{
+          alignItems: "center"
+        }}>
           <Button
             variant="text"
             onClick={onDashboard}

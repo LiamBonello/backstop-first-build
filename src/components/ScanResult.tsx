@@ -234,9 +234,11 @@ export function ScanResult({
                 1
               }
 
-              flexWrap="wrap"
-
               useFlexGap
+
+              sx={{
+                flexWrap: "wrap"
+              }}
             >
               <Chip
                 size="small"
@@ -272,13 +274,11 @@ export function ScanResult({
             </Stack>
 
             <Typography
-              color="text.secondary"
               sx={{
+                color: "text.secondary",
                 mt: 3,
-
-                mb: 0.5,
-              }}
-            >
+                mb: 0.5
+              }}>
               {scan.merchant} · {scan.domain}
             </Typography>
 
@@ -426,7 +426,9 @@ export function ScanResult({
           </Box>
 
           <Stack
-            alignItems="center"
+            sx={{
+              alignItems: "center"
+            }}
           >
             <RiskMeter
               risk={
@@ -471,15 +473,11 @@ export function ScanResult({
         <Box>
           <Stack
             direction="row"
-
-            justifyContent="space-between"
-
-            alignItems="flex-end"
-
             sx={{
-              mb: 2.1,
-            }}
-          >
+              justifyContent: "space-between",
+              alignItems: "flex-end",
+              mb: 2.1
+            }}>
             <Box>
               <Typography
                 variant="h3"
@@ -493,12 +491,10 @@ export function ScanResult({
 
               <Typography
                 variant="body2"
-                color="text.secondary"
-
                 sx={{
-                  mt: 0.5,
-                }}
-              >
+                  color: "text.secondary",
+                  mt: 0.5
+                }}>
                 Expand any finding to see why Backstop surfaced it and open the source page when available.
               </Typography>
             </Box>
@@ -568,7 +564,9 @@ export function ScanResult({
                 1.2
               }
 
-              alignItems="center"
+              sx={{
+                alignItems: "center"
+              }}
             >
               <DataObjectRoundedIcon
                 sx={{
@@ -578,9 +576,9 @@ export function ScanResult({
               />
 
               <Typography
-                fontWeight={
-                  700
-                }
+                sx={{
+                  fontWeight: 700
+                }}
               >
                 Evidence, not a verdict
               </Typography>
@@ -588,16 +586,13 @@ export function ScanResult({
 
             <Typography
               variant="body2"
-
-              color="text.secondary"
-
               sx={{
+                color: "text.secondary",
                 mt: 1.3,
 
                 lineHeight:
-                  1.65,
-              }}
-            >
+                  1.65
+              }}>
               Backstop surfaces evidence and transaction conditions. You stay in control of the purchase decision.
             </Typography>
           </Box>
@@ -622,7 +617,9 @@ export function ScanResult({
             <Typography
               variant="caption"
 
-              color="text.secondary"
+              sx={{
+                color: "text.secondary"
+              }}
             >
               IF YOU BUY IT
             </Typography>
@@ -641,16 +638,13 @@ export function ScanResult({
 
             <Typography
               variant="body2"
-
-              color="text.secondary"
-
               sx={{
+                color: "text.secondary",
                 mt: 1.1,
 
                 lineHeight:
-                  1.65,
-              }}
-            >
+                  1.65
+              }}>
               Save the detected return window, warranty and renewal terms. A later build will calculate exact deadlines from your purchase details.
             </Typography>
 

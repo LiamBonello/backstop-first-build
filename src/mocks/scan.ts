@@ -1,393 +1,141 @@
-import {
-  Alert,
-  Box,
-  Snackbar,
-} from '@mui/material';
-
-import {
-  useState,
-} from 'react';
-
-import {
-  AmbientBackground,
-} from './components/AmbientBackground';
-
-import {
-  CursorGlow,
-} from './components/CursorGlow';
-
-import {
-  Dashboard,
-} from './components/Dashboard';
-
-import {
-  HeroScanner,
-} from './components/HeroScanner';
-
-import {
-  ScanResult,
-} from './components/ScanResult';
-
-import {
-  SignalSection,
-} from './components/SignalSection';
-
-import {
-  TopNav,
-} from './components/TopNav';
-
-import {
-  mapScanResponse,
-} from './mappers/scanMapper';
-
-import {
-  scanService,
-} from './services/scanService';
-
-import type {
-  PurchaseScan,
-} from './types/purchase';
-
-type View =
-  | 'home'
-  | 'result'
-  | 'dashboard';
-
-export default function App() {
-  const [
-    view,
-    setView,
-  ] =
-    useState<View>(
-      'home',
-    );
-
-  const [
-    isScanning,
-    setIsScanning,
-  ] =
-    useState(false);
-
-  const [
-    scan,
-    setScan,
-  ] =
-    useState<PurchaseScan | null>(
-      null,
-    );
-
-  const [
-    protectedPurchase,
-    setProtectedPurchase,
-  ] =
-    useState(false);
-
-  const [
-    toastOpen,
-    setToastOpen,
-  ] =
-    useState(false);
-
-  const [
-    scanError,
-    setScanError,
-  ] =
-    useState<
-      string | null
-    >(null);
-
-  const handleScan =
-    async (
-      url: string,
-    ) => {
-      if (
-        isScanning
-      ) {
-        return;
-      }
-
-      setIsScanning(
-        true,
-      );
-
-      setProtectedPurchase(
-        false,
-      );
-
-      setScanError(
-        null,
-      );
-
-      try {
-        const response =
-          await scanService.analyze(
-            url,
-          );
-
-        setScan(
-          mapScanResponse(
-            response,
-          ),
-        );
-
-        setView(
-          'result',
-        );
-
-        window.scrollTo({
-          top: 0,
-
-          behavior:
-            'smooth',
-        });
-      } catch (error) {
-        setScanError(
-          error instanceof
-          Error
-            ? error.message
-            : 'Backstop could not complete that scan.',
-        );
-      } finally {
-        setIsScanning(
-          false,
-        );
-      }
-    };
-
-  const handleProtect =
-    () => {
-      setProtectedPurchase(
-        true,
-      );
-
-      setToastOpen(
-        true,
-      );
-    };
-
-  const goHome =
-    () => {
-      setView(
-        'home',
-      );
-
-      window.scrollTo({
-        top: 0,
-
-        behavior:
-          'smooth',
-      });
-    };
-
-  const goDashboard =
-    () => {
-      setView(
-        'dashboard',
-      );
-
-      window.scrollTo({
-        top: 0,
-
-        behavior:
-          'smooth',
-      });
-    };
-
-  return (
-    <Box
-      sx={{
-        minHeight:
-          '100vh',
-
-        position:
-          'relative',
-
-        isolation:
-          'isolate',
-      }}
-    >
-      <AmbientBackground />
-
-      <CursorGlow />
-
-      <TopNav
-        onDashboard={
-          goDashboard
-        }
-
-        onHome={
-          goHome
-        }
-      />
-
-      <Box component="main">
-        {view ===
-          'home' && (
-          <>
-            <HeroScanner
-              isScanning={
-                isScanning
-              }
-
-              onScan={
-                handleScan
-              }
-            />
-
-            {!isScanning && (
-              <SignalSection />
-            )}
-          </>
-        )}
-
-        {view ===
-          'result' &&
-          scan && (
-            <ScanResult
-              scan={
-                scan
-              }
-
-              protectedPurchase={
-                protectedPurchase
-              }
-
-              onProtect={
-                handleProtect
-              }
-
-              onNewScan={
-                goHome
-              }
-
-              onDashboard={
-                goDashboard
-              }
-            />
-          )}
-
-        {view ===
-          'dashboard' && (
-          <Dashboard
-            scan={
-              scan
-            }
-
-            protectedPurchase={
-              protectedPurchase
-            }
-
-            onBack={() =>
-              setView(
-                scan
-                  ? 'result'
-                  : 'home',
-              )
-            }
-
-            onScanNew={
-              goHome
-            }
-          />
-        )}
-      </Box>
-
-      <Snackbar
-        open={
-          toastOpen
-        }
-
-        autoHideDuration={
-          4200
-        }
-
-        onClose={() =>
-          setToastOpen(
-            false,
-          )
-        }
-
-        anchorOrigin={{
-          vertical:
-            'bottom',
-
-          horizontal:
-            'center',
-        }}
-      >
-        <Alert
-          severity="success"
-
-          variant="filled"
-
-          onClose={() =>
-            setToastOpen(
-              false,
-            )
-          }
-
-          sx={{
-            borderRadius:
-              3,
-
-            bgcolor:
-              '#152A24',
-
-            color:
-              '#C9FFEF',
-          }}
-        >
-          Purchase protected. Backstop is now tracking its key terms.
-        </Alert>
-      </Snackbar>
-
-      <Snackbar
-        open={
-          Boolean(
-            scanError,
-          )
-        }
-
-        autoHideDuration={
-          7000
-        }
-
-        onClose={() =>
-          setScanError(
-            null,
-          )
-        }
-
-        anchorOrigin={{
-          vertical:
-            'bottom',
-
-          horizontal:
-            'center',
-        }}
-      >
-        <Alert
-          severity="error"
-
-          variant="filled"
-
-          onClose={() =>
-            setScanError(
-              null,
-            )
-          }
-
-          sx={{
-            borderRadius:
-              3,
-
-            maxWidth:
-              620,
-          }}
-        >
-          {scanError}
-        </Alert>
-      </Snackbar>
-    </Box>
-  );
-}
+import type { RawScanResponseDto } from '../types/purchase';
+
+export const DEMO_URL =
+  'https://novalume-store.com/products/halo-jacket';
+
+export const demoScanResponse: RawScanResponseDto = {
+  scanId: 'scan_demo_001',
+
+  merchantName: 'NovaLume',
+
+  merchantDomain: 'novalume-store.com',
+
+  productName: 'Halo Technical Jacket',
+
+  currency: 'EUR',
+
+  amount: 189,
+
+  confidencePercent: 94,
+
+  riskPercent: 68,
+
+  verdict: 'Proceed carefully',
+
+  scannedAtIso: '2026-09-20T08:15:00.000Z',
+
+  signals: [
+    {
+      id: 'identity',
+      label: 'Identity',
+      scorePercent: 86,
+      statusLabel: 'Strong',
+    },
+    {
+      id: 'pricing',
+      label: 'Pricing',
+      scorePercent: 52,
+      statusLabel: 'Verify discount',
+    },
+    {
+      id: 'returns',
+      label: 'Returns',
+      scorePercent: 34,
+      statusLabel: 'Friction',
+    },
+    {
+      id: 'commitment',
+      label: 'Commitment',
+      scorePercent: 22,
+      statusLabel: 'Recurring risk',
+    },
+    {
+      id: 'protection',
+      label: 'Protection',
+      scorePercent: 84,
+      statusLabel: 'Mainstream methods',
+    },
+  ],
+
+  findings: [
+    {
+      id: 'finding_subscription',
+
+      category: 'Commitment',
+
+      headline: 'Recurring membership added at checkout',
+
+      detail:
+        'The checkout terms include a €9.99 monthly membership after a 7-day introductory period unless it is deselected before payment.',
+
+      sourceLabel: 'Checkout terms',
+
+      sourceUrl: null,
+
+      severityCode: 'HIGH',
+    },
+
+    {
+      id: 'finding_returns',
+
+      category: 'Returns',
+
+      headline: 'Returns require international shipping',
+
+      detail:
+        'The return policy states that customers cover return postage to a non-EU warehouse. That can materially reduce the value of a refund.',
+
+      sourceLabel: 'Return policy',
+
+      sourceUrl: null,
+
+      severityCode: 'MEDIUM',
+    },
+
+    {
+      id: 'finding_discount',
+
+      category: 'Pricing',
+
+      headline: 'Discount history could not be verified',
+
+      detail:
+        'The store displays a 60% discount, but no reliable historical reference price was found in the demo data used by this first build.',
+
+      sourceLabel: 'Price signal',
+
+      sourceUrl: null,
+
+      severityCode: 'MEDIUM',
+    },
+
+    {
+      id: 'finding_payment',
+
+      category: 'Payment',
+
+      headline: 'Card and PayPal protection available',
+
+      detail:
+        'The checkout offers mainstream payment methods that may provide additional dispute routes if the item never arrives or is materially misrepresented.',
+
+      sourceLabel: 'Checkout methods',
+
+      sourceUrl: null,
+
+      severityCode: 'GOOD',
+    },
+  ],
+
+  protection: {
+    returnWindowDays: 14,
+
+    warrantyMonths: 24,
+
+    renewalAmount: 9.99,
+
+    renewalIntervalLabel: 'month',
+
+    estimatedMoneyAtRisk: 198.99,
+  },
+};

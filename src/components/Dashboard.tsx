@@ -79,11 +79,12 @@ export function Dashboard({
 
       <Stack
         direction={{ xs: "column", sm: "row" }}
-        justifyContent="space-between"
-        alignItems={{ xs: "stretch", sm: "flex-end" }}
-        gap={2}
-        sx={{ mt: 3 }}
-      >
+        sx={{
+          justifyContent: "space-between",
+          alignItems: { xs: "stretch", sm: "flex-end" },
+          gap: 2,
+          mt: 3
+        }}>
         <Box>
           <Chip
             size="small"
@@ -97,7 +98,12 @@ export function Dashboard({
           >
             Your money has a memory now.
           </Typography>
-          <Typography color="text.secondary" sx={{ mt: 1, maxWidth: 620 }}>
+          <Typography
+            sx={{
+              color: "text.secondary",
+              mt: 1,
+              maxWidth: 620
+            }}>
             The purchases, obligations and deadlines worth remembering, without
             relying on your inbox or your memory.
           </Typography>
@@ -147,7 +153,9 @@ export function Dashboard({
               >
                 {stat.value}
               </Typography>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{
+                color: "text.secondary"
+              }}>
                 {stat.label}
               </Typography>
             </Box>
@@ -157,15 +165,22 @@ export function Dashboard({
 
       <Stack
         direction="row"
-        justifyContent="space-between"
-        alignItems="center"
-        sx={{ mt: 6, mb: 2 }}
-      >
+        sx={{
+          justifyContent: "space-between",
+          alignItems: "center",
+          mt: 6,
+          mb: 2
+        }}>
         <Box>
           <Typography variant="h3" sx={{ fontSize: "1.6rem" }}>
             Protected purchases
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+              mt: 0.5
+            }}>
             Sorted by the next thing that needs your attention.
           </Typography>
         </Box>
@@ -176,20 +191,20 @@ export function Dashboard({
           <Stack
             key={purchase.id}
             direction={{ xs: "column", sm: "row" }}
-            alignItems={{ xs: "flex-start", sm: "center" }}
             spacing={2}
             sx={{
+              alignItems: { xs: "flex-start", sm: "center" },
               p: 2.2,
               borderRadius: 4,
               bgcolor: alpha("#0D1016", 0.68),
               border: `1px solid ${alpha("#ffffff", 0.065)}`,
               transition: "transform .2s ease, border-color .2s ease",
+
               "&:hover": {
                 transform: "translateY(-2px)",
                 borderColor: alpha("#9D7BFF", 0.18),
-              },
-            }}
-          >
+              }
+            }}>
             <Box
               sx={{
                 width: 44,
@@ -214,13 +229,19 @@ export function Dashboard({
               )}
             </Box>
             <Box sx={{ flex: 1 }}>
-              <Typography variant="caption" color="text.secondary">
+              <Typography variant="caption" sx={{
+                color: "text.secondary"
+              }}>
                 {purchase.merchant}
               </Typography>
-              <Typography fontWeight={700}>{purchase.product}</Typography>
+              <Typography sx={{
+                fontWeight: 700
+              }}>{purchase.product}</Typography>
             </Box>
             <Box sx={{ textAlign: { xs: "left", sm: "right" } }}>
-              <Typography fontWeight={700}>{purchase.amountLabel}</Typography>
+              <Typography sx={{
+                fontWeight: 700
+              }}>{purchase.amountLabel}</Typography>
               <Typography
                 variant="caption"
                 color={

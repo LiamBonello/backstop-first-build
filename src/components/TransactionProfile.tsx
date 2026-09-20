@@ -60,7 +60,9 @@ export function TransactionProfile({
       <Stack
         direction="row"
         spacing={1.1}
-        alignItems="center"
+        sx={{
+          alignItems: "center"
+        }}
       >
         <HubRoundedIcon
           sx={{
@@ -74,14 +76,18 @@ export function TransactionProfile({
 
         <Box>
           <Typography
-            fontWeight={700}
+            sx={{
+              fontWeight: 700
+            }}
           >
             Transaction profile
           </Typography>
 
           <Typography
             variant="caption"
-            color="text.secondary"
+            sx={{
+              color: "text.secondary"
+            }}
           >
             Stronger bars mean clearer or more favourable evidence.
           </Typography>
@@ -139,17 +145,16 @@ export function TransactionProfile({
               >
                 <Stack
                   direction="row"
-                  justifyContent="space-between"
-                  gap={2}
                   sx={{
-                    mb: 0.7,
-                  }}
-                >
+                    justifyContent: "space-between",
+                    gap: 2,
+                    mb: 0.7
+                  }}>
                   <Typography
                     variant="body2"
-                    fontWeight={
-                      700
-                    }
+                    sx={{
+                      fontWeight: 700
+                    }}
                   >
                     {
                       signal.label

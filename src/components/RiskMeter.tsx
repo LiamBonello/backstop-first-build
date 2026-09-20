@@ -256,14 +256,14 @@ export function RiskMeter({
       />
 
       <Stack
-        alignItems="center"
         sx={{
+          alignItems: "center",
+
           position:
             'relative',
 
-          zIndex: 1,
-        }}
-      >
+          zIndex: 1
+        }}>
         <Typography
           sx={{
             fontFamily:
@@ -287,14 +287,13 @@ export function RiskMeter({
 
         <Typography
           variant="caption"
-          color="text.secondary"
           sx={{
+            color: "text.secondary",
             mt: 0.7,
 
             letterSpacing:
-              '.08em',
-          }}
-        >
+              '.08em'
+          }}>
           RISK SIGNAL
         </Typography>
 

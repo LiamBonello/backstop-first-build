@@ -45,16 +45,15 @@ export function HeroScanner({ isScanning, onScan }: HeroScannerProps) {
 
   return (
     <Stack
-      alignItems="center"
       sx={{
+        alignItems: "center",
         maxWidth: 980,
         mx: 'auto',
         pt: { xs: 9, md: 14 },
         pb: { xs: 9, md: 13 },
         px: 2,
-        textAlign: 'center',
-      }}
-    >
+        textAlign: 'center'
+      }}>
       <Chip
         icon={<BoltRoundedIcon />}
         label="Independent purchase intelligence"
@@ -175,12 +174,17 @@ export function HeroScanner({ isScanning, onScan }: HeroScannerProps) {
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         spacing={{ xs: 1.2, sm: 2.4 }}
-        alignItems="center"
-        sx={{ mt: 2.8 }}
-      >
-        <Stack direction="row" spacing={0.8} alignItems="center">
+        sx={{
+          alignItems: "center",
+          mt: 2.8
+        }}>
+        <Stack direction="row" spacing={0.8} sx={{
+          alignItems: "center"
+        }}>
           <LockOutlinedIcon sx={{ fontSize: 15, color: 'text.secondary' }} />
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" sx={{
+            color: "text.secondary"
+          }}>
             No account required to scan
           </Typography>
         </Stack>
