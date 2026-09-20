@@ -1182,8 +1182,8 @@ export async function analyzeUrl(
       : "Merchant contact route was not obvious",
 
     detail: hasContactRoute
-      ? "The inspected page exposes a contact, support, email or telephone route. Backstop separately checks domain registration, DNS and TLS; company-registry verification is not yet included."
-      : "Backstop did not find an obvious contact, support, email or telephone route on the inspected page. Domain registration, DNS and TLS are checked independently, but company-registry verification is not yet included.",
+      ? "The inspected page exposes a contact, support, email or telephone route. Backstop also checks domain registration, DNS, TLS and, where a legal entity can be extracted, a GLEIF LEI lookup."
+      : "Backstop did not find an obvious contact, support, email or telephone route on the inspected page. Domain registration, DNS, TLS and eligible GLEIF LEI lookups are checked independently.",
 
     sourceLabel: "Merchant page",
 
@@ -1263,7 +1263,7 @@ export async function analyzeUrl(
     findings.push({
       id: "finding_threat",
       category: "Threat",
-      headline: "No configured threat-list match found",
+      headline: "No threat-list match found",
       detail:
         "Google Web Risk returned no match for malware, social-engineering or unwanted-software lists. This does not prove that the merchant or transaction is safe.",
       sourceLabel: "Google Web Risk",
@@ -1291,9 +1291,9 @@ export async function analyzeUrl(
     findings.push({
       id: "finding_company",
       category: "Identity",
-      headline: "Published legal entity was not independently matched",
+      headline: "Published legal entity found; no LEI record matched",
       detail:
-        "Backstop extracted a legal entity from the merchant's own pages, but GLEIF did not return a sufficiently close LEI record. Many legitimate businesses do not have an LEI, so this is informational rather than evidence of a problem.",
+        "Backstop extracted a legal entity from the merchant's own pages, but GLEIF did not return a sufficiently close LEI record. Many legitimate businesses do not have an LEI, so this is informational only and is not treated as a negative trust signal.",
       sourceLabel: "Company identity",
       sourceUrl: companyIntelligence.publishedSourceUrl,
       severityCode: "INFO",

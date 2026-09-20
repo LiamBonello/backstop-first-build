@@ -198,11 +198,11 @@ const mapCompanyIntelligence = (
     return {
       publishedIdentityLabel,
       publishedSourceUrl: dto.publishedSourceUrl,
-      registryStatusLabel: 'No LEI match',
+      registryStatusLabel: 'No LEI record',
       registryDetailLabel:
-        'GLEIF did not return a sufficiently close LEI record for the published legal entity. Many legitimate businesses do not have an LEI, so this is not a negative trust signal.',
+        'GLEIF did not return a sufficiently close LEI record for the published legal entity. Many legitimate businesses do not have an LEI, so this is informational only.',
       registryUrl: null,
-      tone: 'warning',
+      tone: 'neutral',
     };
   }
 
@@ -212,9 +212,9 @@ const mapCompanyIntelligence = (
       publishedSourceUrl: dto.publishedSourceUrl,
       registryStatusLabel: 'Not checked',
       registryDetailLabel:
-        'Backstop needs a published legal entity before attempting a registry match.',
+        'Backstop needs a published legal entity before attempting an LEI lookup.',
       registryUrl: null,
-      tone: 'warning',
+      tone: 'neutral',
     };
   }
 
