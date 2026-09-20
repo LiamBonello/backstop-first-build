@@ -159,7 +159,7 @@ export function Dashboard({
 
             <Chip
               size="small"
-              label="Saved on this device"
+              label="Local PostgreSQL"
               sx={{
                 color:
                   'text.secondary',
@@ -195,7 +195,7 @@ export function Dashboard({
                 640,
             }}
           >
-            Exact return, warranty and renewal deadlines calculated from the purchase details you saved.
+            Exact return, warranty and renewal deadlines persisted in your local PostgreSQL database.
           </Typography>
         </Box>
 
