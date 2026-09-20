@@ -20,7 +20,7 @@ Backstop is a consumer purchase-intelligence prototype that inspects a public sh
 - Explainable heuristic risk scoring
 - Purchase-date and delivery-date capture
 - Calculated return, warranty and renewal deadlines
-- Local protected-purchase persistence
+- Dockerized PostgreSQL protected-purchase persistence
 - Dynamic protection dashboard
 - Protected-purchase detail view and event timeline
 - Saved scan-evidence snapshots for newly protected purchases
@@ -29,12 +29,33 @@ Backstop is a consumer purchase-intelligence prototype that inspects a public sh
 
 ## Run locally
 
+Install dependencies:
+
 ```bash
 npm install
+```
+
+Start PostgreSQL:
+
+```bash
+docker compose up -d
+```
+
+Apply database migrations:
+
+```bash
+npm run db:migrate
+```
+
+Start Backstop:
+
+```bash
 npm run dev
 ```
 
 Then open the Vite URL, normally `http://localhost:5173`.
+
+The default database connection is `postgresql://backstop:backstop@localhost:5432/backstop`, matching `docker-compose.yml`. Set `DATABASE_URL` in `.env` only if you want a different local PostgreSQL instance.
 
 ## Verify the build
 
@@ -62,31 +83,37 @@ Google Web Risk is optional. When no key is configured, Backstop reports that th
 
 ## Protection persistence
 
-Protected purchases are currently stored in browser `localStorage` through `src/services/protectionService.ts`.
+Protected purchases now use the Express API and a local PostgreSQL database. The browser keeps only an anonymous client UUID in `localStorage` so local records can be namespaced without implementing accounts yet.
 
-The UI does not perform deadline arithmetic directly. The service stores raw purchase data and derives:
+On the first successful database load, Backstop automatically imports legacy protected purchases from the previous `localStorage` model and removes the old purchase payload only after the import succeeds.
 
-- return deadline
-- warranty deadline
-- next renewal date when the interval is known
-- next upcoming deadline
-- attention state
-- dashboard metrics
+The database stores:
 
-The return calculation uses the delivery date when the user supplies one; otherwise it uses the purchase date. This is a calculation assumption, not a substitute for checking the merchant policy trigger.
+- purchase and delivery dates
+- calculated return, warranty and renewal deadlines
+- detected protection terms
+- lifecycle state
+- saved scan-evidence snapshots
+- merchant/product/value metadata
 
-Local storage is an MVP persistence layer. The service boundary is intended to make later migration to authenticated server persistence straightforward.
+Deadline calculation is repeated server-side before persistence. The frontend still calculates previews for immediate UX, but PostgreSQL is the source of truth for saved records.
+
+This client UUID is **not authentication** and is not a security boundary. Real accounts remain a later production step.
 
 ## Main files
 
 - `server/scanner.ts` - scan orchestration and scoring
+- `server/db/pool.ts` - PostgreSQL connection pool
+- `server/db/migrate.ts` - SQL migration runner
+- `server/protectionRepository.ts` - PostgreSQL persistence layer
+- `server/protectionRoutes.ts` - protection API
 - `server/browserFetch.ts` - restricted Chromium-rendered fallback
 - `server/domainIntelligence.ts` - RDAP, DNS and TLS evidence
 - `server/threatIntelligence.ts` - Google Web Risk adapter
 - `server/companyIntelligence.ts` - merchant identity and GLEIF lookup
 - `src/mappers/scanMapper.ts` - API-to-UI transformation
 - `src/services/scanService.ts` - scanner client
-- `src/services/protectionService.ts` - protected-purchase persistence and deadline calculations
+- `src/services/protectionService.ts` - protection API client, UI hydration and legacy localStorage migration
 - `src/components/ProtectionDrawer.tsx` - protection setup
 - `src/components/Dashboard.tsx` - saved purchase dashboard
 - `src/components/ProtectedPurchaseDetail.tsx` - purchase timeline, evidence and lifecycle actions
@@ -100,7 +127,7 @@ The Chromium fallback is conditional and restricted: public HTTP(S) network targ
 
 ## Next logical build steps
 
-1. Authenticated persistence instead of device-only local storage
+1. Authentication and mapping the local client namespace to real user accounts
 2. Notification scheduling for upcoming deadlines
 3. Receipt and email ingestion
 4. Dispute/refund workflow using saved evidence
