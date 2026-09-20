@@ -695,6 +695,11 @@ export function Dashboard({
                 >
                   <IconButton
                     aria-label={`Remove protection for ${purchase.product}`}
+                    onKeyDown={(
+                      event,
+                    ) =>
+                      event.stopPropagation()
+                    }
                     onClick={(
                       event,
                     ) => {
