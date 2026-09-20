@@ -74,6 +74,10 @@ When a backend exists, replace the implementation of `ScanService` without movin
 
 Backstop first scans public HTML directly. If core product evidence is missing or the page appears JavaScript-gated, the API conditionally renders the page in headless Chromium and re-runs the same extraction pipeline against the rendered DOM.
 
-The fallback uses `playwright-chromium` and is enabled by default. Set `BACKSTOP_BROWSER_FALLBACK=0` in `.env` to disable it.
+The fallback uses `playwright-chromium` and is enabled by default.
+
+- `BACKSTOP_BROWSER_FALLBACK=1` uses Chromium only when the static scan is incomplete.
+- `BACKSTOP_BROWSER_FALLBACK=force` always attempts Chromium rendering and is useful for local verification.
+- `BACKSTOP_BROWSER_FALLBACK=0` disables browser rendering and forces static HTML scanning.
 
 Network requests made by the fallback are restricted to public HTTP(S) hosts, service workers and WebSockets are blocked, and heavy image/media/font resources are skipped.
