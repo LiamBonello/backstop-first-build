@@ -143,23 +143,6 @@ const selectPublishedIdentity = (
   };
 };
 
-const getNestedRecord = (
-  value: unknown,
-  ...keys: string[]
-): Record<string, unknown> | null => {
-  let current = asRecord(value);
-
-  for (const key of keys) {
-    if (!current) {
-      return null;
-    }
-
-    current = asRecord(current[key]);
-  }
-
-  return current;
-};
-
 const readString = (
   record: Record<string, unknown> | null,
   key: string,
