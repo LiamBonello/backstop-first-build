@@ -258,6 +258,32 @@ export interface ProtectionInput {
   deliveryDate: string | null;
 }
 
+export type PurchaseLifecycleStatus =
+  | 'active'
+  | 'kept'
+  | 'returned'
+  | 'refunded';
+
+export interface ProtectionEvidenceSnapshot {
+  risk: number;
+  verdict: string;
+  evidenceCoverage: number;
+  scannedAtLabel: string;
+  findings: Finding[];
+}
+
+export interface ProtectionTimelineItem {
+  id: string;
+  label: string;
+  detail: string;
+  dateLabel: string | null;
+  state:
+    | 'complete'
+    | 'upcoming'
+    | 'expired'
+    | 'neutral';
+}
+
 export interface ProtectedPurchase {
   id: string;
   sourceScanId: string;
@@ -282,6 +308,13 @@ export interface ProtectedPurchase {
   nextDeadlineIso: string | null;
   nextDeadlineLabel: string;
   deadlineCount: number;
+
+  lifecycleStatus: PurchaseLifecycleStatus;
+  lifecycleLabel: string;
+  lifecycleUpdatedLabel: string | null;
+
+  evidenceSnapshot: ProtectionEvidenceSnapshot | null;
+  timeline: ProtectionTimelineItem[];
 
   status:
     | 'protected'
