@@ -8,9 +8,9 @@ services:
       POSTGRES_USER: backstop
       POSTGRES_PASSWORD: backstop
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
-      - backstop_postgres_data:/var/lib/postgresql/data
+      - backstop_postgres_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U backstop -d backstop"]
       interval: 5s
