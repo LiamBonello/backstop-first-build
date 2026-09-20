@@ -79,8 +79,12 @@ export function ScanResult({
   ] = useState(false);
 
   const handleProtect =
-    () => {
-      onProtect();
+    (
+      input: ProtectionInput,
+    ) => {
+      onProtect(
+        input,
+      );
 
       setDrawerOpen(
         false,
@@ -691,7 +695,7 @@ export function ScanResult({
                 lineHeight:
                   1.65
               }}>
-              Save the detected return window, warranty and renewal terms. A later build will calculate exact deadlines from your purchase details.
+              Save the detected return window, warranty and renewal terms, then turn them into exact tracked deadlines from your purchase details.
             </Typography>
 
             <Button
