@@ -1,5 +1,6 @@
 import express from 'express';
 import { checkDatabaseConnection } from './db/pool';
+import { notificationRouter } from './notificationRoutes';
 import { protectionRouter } from './protectionRoutes';
 import { analyzeUrl } from './scanner';
 import { ScannerError } from './scannerError';
@@ -45,6 +46,11 @@ app.get(
 app.use(
   '/api/protection',
   protectionRouter,
+);
+
+app.use(
+  '/api/notifications',
+  notificationRouter,
 );
 
 app.post(
