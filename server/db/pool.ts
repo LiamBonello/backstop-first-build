@@ -1,7 +1,7 @@
 import { Pool } from 'pg';
 
 const DEFAULT_DATABASE_URL =
-  'postgresql://backstop:backstop@localhost:5433/backstop';
+  'postgresql://backstop:backstop@127.0.0.1:55432/backstop';
 
 let pool: Pool | null = null;
 
