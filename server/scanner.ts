@@ -7,7 +7,10 @@ import type {
   RawScanResponseDto,
   RawSignalDto,
 } from "../src/types/purchase";
-import { fetchRenderedHtml } from "./browserFetch";
+import {
+  fetchRenderedHtml,
+  getBrowserFallbackMode,
+} from "./browserFetch";
 import { inspectCompanyIdentity } from "./companyIntelligence";
 import { inspectDomain } from "./domainIntelligence";
 import { fetchHtml, type FetchedHtml } from "./fetchHtml";
@@ -769,7 +772,13 @@ export async function analyzeUrl(
   let parsed = parseMainPage(page);
   let scanMethod: RawScanResponseDto["scanMethod"] = "STATIC_HTML";
 
-  if (shouldUseBrowserFallback(parsed)) {
+  const browserFallbackMode = getBrowserFallbackMode();
+
+  if (
+    browserFallbackMode === "force" ||
+    (browserFallbackMode === "conditional" &&
+      shouldUseBrowserFallback(parsed))
+  ) {
     const renderedPage = await fetchRenderedHtml(page.finalUrl);
 
     if (renderedPage) {
