@@ -12,6 +12,10 @@ import type {
 } from '../src/types/purchase';
 
 import {
+  notificationRepository,
+} from './notificationRepository';
+
+import {
   isDateOnly,
 } from './protectionDates';
 
@@ -407,6 +411,11 @@ router.patch(
         return;
       }
 
+      await notificationRepository.invalidatePurchase(
+        response.locals.clientId as string,
+        request.params.id,
+      );
+
       response.json(
         record,
       );
@@ -485,6 +494,11 @@ router.patch(
 
         return;
       }
+
+      await notificationRepository.invalidatePurchase(
+        response.locals.clientId as string,
+        request.params.id,
+      );
 
       response.json(
         record,
