@@ -69,3 +69,11 @@ When a backend exists, replace the implementation of `ScanService` without movin
 6. Receipt/email ingestion
 7. Browser extension
 8. Evidence archive and dispute workflow
+
+## Browser-rendered fallback
+
+Backstop first scans public HTML directly. If core product evidence is missing or the page appears JavaScript-gated, the API conditionally renders the page in headless Chromium and re-runs the same extraction pipeline against the rendered DOM.
+
+The fallback uses `playwright-chromium` and is enabled by default. Set `BACKSTOP_BROWSER_FALLBACK=0` in `.env` to disable it.
+
+Network requests made by the fallback are restricted to public HTTP(S) hosts, service workers and WebSockets are blocked, and heavy image/media/font resources are skipped.
