@@ -20,6 +20,7 @@ import {
 } from 'react';
 
 import type {
+  ProtectionInput,
   PurchaseScan,
 } from '../types/purchase';
 
@@ -54,7 +55,9 @@ interface ScanResultProps {
     boolean;
 
   onProtect:
-    () => void;
+    (
+      input: ProtectionInput,
+    ) => void;
 
   onNewScan:
     () => void;
