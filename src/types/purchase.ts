@@ -33,6 +33,19 @@ export interface RawSignalDto {
   statusLabel: string;
 }
 
+export interface RawRiskFactorDto {
+  id: string;
+  label: string;
+  detail: string;
+  impactPoints: number;
+}
+
+export interface RawRiskBreakdownDto {
+  baselinePoints: number;
+  uncappedPoints: number;
+  factors: RawRiskFactorDto[];
+}
+
 export interface RawDomainIntelligenceDto {
   registrableDomain: string;
   registrationDateIso: string | null;
@@ -92,6 +105,7 @@ export interface RawScanResponseDto {
 
   evidenceCoveragePercent: number;
   riskPercent: number;
+  riskBreakdown: RawRiskBreakdownDto;
 
   verdict: string;
 
@@ -137,6 +151,24 @@ export interface ScanSignal {
   label: string;
   score: number;
   statusLabel: string;
+}
+
+export interface RiskFactor {
+  id: string;
+  label: string;
+  detail: string;
+  impactPoints: number;
+  impactLabel: string;
+  tone: 'increase' | 'decrease';
+}
+
+export interface RiskBreakdown {
+  baselinePoints: number;
+  baselineLabel: string;
+  baselineDetail: string;
+  uncappedPoints: number;
+  calculationLabel: string;
+  factors: RiskFactor[];
 }
 
 export interface DomainIntelligence {
@@ -197,6 +229,7 @@ export interface PurchaseScan {
 
   evidenceCoverage: number;
   risk: number;
+  riskBreakdown: RiskBreakdown;
 
   verdict: string;
 

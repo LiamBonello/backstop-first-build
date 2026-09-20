@@ -446,6 +446,10 @@ export function ScanResult({
               verdict={
                 scan.verdict
               }
+
+              breakdown={
+                scan.riskBreakdown
+              }
             />
           </Stack>
         </Box>

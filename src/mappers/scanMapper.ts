@@ -7,6 +7,8 @@ import type {
   PurchaseScan,
   RawFindingDto,
   RawScanResponseDto,
+  RiskBreakdown,
+  RiskFactor,
   ScanSignal,
   Severity,
 } from '../types/purchase';
@@ -91,6 +93,53 @@ const mapSignal = (
   statusLabel:
     signal.statusLabel,
 });
+
+const mapRiskFactor = (
+  factor:
+    RawScanResponseDto['riskBreakdown']['factors'][number],
+): RiskFactor => ({
+  id: factor.id,
+  label: factor.label,
+  detail: factor.detail,
+  impactPoints: factor.impactPoints,
+  impactLabel:
+    factor.impactPoints > 0
+      ? `+${factor.impactPoints}`
+      : `${factor.impactPoints}`,
+  tone:
+    factor.impactPoints > 0
+      ? 'increase'
+      : 'decrease',
+});
+
+const mapRiskBreakdown = (
+  dto: RawScanResponseDto['riskBreakdown'],
+  finalRisk: number,
+): RiskBreakdown => {
+  const factors = dto.factors.map(mapRiskFactor);
+
+  const adjustmentExpression =
+    factors.length > 0
+      ? factors
+          .map((factor) =>
+            factor.impactPoints > 0
+              ? `+ ${factor.impactPoints}`
+              : `- ${Math.abs(factor.impactPoints)}`,
+          )
+          .join(' ')
+      : '';
+
+  return {
+    baselinePoints: dto.baselinePoints,
+    baselineLabel: 'Model baseline',
+    baselineDetail:
+      'Every scan starts above zero so that an absence of detected problems is not presented as proof of zero risk.',
+    uncappedPoints: dto.uncappedPoints,
+    calculationLabel:
+      `${dto.baselinePoints}${adjustmentExpression ? ` ${adjustmentExpression}` : ''} = ${finalRisk}`,
+    factors,
+  };
+};
 
 const formatDomainAge = (days: number | null): string => {
   if (days === null) {
@@ -332,6 +381,12 @@ export const mapScanResponse = (
 
     risk:
       dto.riskPercent,
+
+    riskBreakdown:
+      mapRiskBreakdown(
+        dto.riskBreakdown,
+        dto.riskPercent,
+      ),
 
     verdict:
       dto.verdict,

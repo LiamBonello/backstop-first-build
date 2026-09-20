@@ -3,6 +3,7 @@ import * as cheerio from "cheerio";
 import { getDomain } from "tldts";
 import type {
   RawFindingDto,
+  RawRiskFactorDto,
   RawScanResponseDto,
   RawSignalDto,
 } from "../src/types/purchase";
@@ -12,6 +13,7 @@ import { fetchHtml } from "./fetchHtml";
 import { inspectThreatIntelligence } from "./threatIntelligence";
 
 const MAIN_PAGE_MAX_BYTES = 10_000_000;
+const RISK_BASELINE_POINTS = 16;
 
 interface PolicyCandidate {
   kind: "returns" | "terms" | "shipping" | "warranty" | "cancellation";
@@ -784,73 +786,151 @@ export async function analyzeUrl(
 
   const https = page.finalUrl.protocol === "https:";
 
-  let risk = 16;
+  const riskFactors: RawRiskFactorDto[] = [];
+  let rawRisk = RISK_BASELINE_POINTS;
+
+  const applyRiskFactor = (
+    condition: boolean,
+    factor: RawRiskFactorDto,
+  ): void => {
+    if (!condition) {
+      return;
+    }
+
+    riskFactors.push(factor);
+    rawRisk += factor.impactPoints;
+  };
 
   if (
     domainIntelligence.domainAgeDays !== null &&
     domainIntelligence.domainAgeDays < 30
   ) {
-    risk += 20;
-  } else if (
-    domainIntelligence.domainAgeDays !== null &&
-    domainIntelligence.domainAgeDays < 180
-  ) {
-    risk += 10;
+    applyRiskFactor(true, {
+      id: "domain_very_new",
+      label: "Very recent domain registration",
+      detail:
+        "RDAP indicates the registrable domain was created less than 30 days ago. New domains can be legitimate, but they provide less operating history.",
+      impactPoints: 20,
+    });
+  } else {
+    applyRiskFactor(
+      domainIntelligence.domainAgeDays !== null &&
+        domainIntelligence.domainAgeDays < 180,
+      {
+        id: "domain_recent",
+        label: "Recent domain registration",
+        detail:
+          "RDAP indicates the registrable domain is less than 180 days old, so there is limited domain history to assess.",
+        impactPoints: 10,
+      },
+    );
   }
 
-  if (domainIntelligence.tlsAuthorized === false) {
-    risk += 18;
-  }
+  applyRiskFactor(domainIntelligence.tlsAuthorized === false, {
+    id: "tls_validation",
+    label: "TLS certificate validation issue",
+    detail:
+      "The HTTPS certificate did not validate successfully during Backstop's independent TLS check.",
+    impactPoints: 18,
+  });
 
-  if (threatIntelligence.status === "FLAGGED") {
-    risk += 55;
-  }
+  applyRiskFactor(threatIntelligence.status === "FLAGGED", {
+    id: "threat_match",
+    label: "Threat-intelligence match",
+    detail:
+      "Google Web Risk returned a malware, social-engineering or unwanted-software match for this URL.",
+    impactPoints: 55,
+  });
 
-  if (recurringDetected) {
-    risk += 29;
-  }
+  applyRiskFactor(recurringDetected, {
+    id: "recurring_commitment",
+    label: "Recurring commitment language",
+    detail:
+      "Subscription, membership or automatic-renewal language was detected in the inspected pages.",
+    impactPoints: 29,
+  });
 
-  if (!hasReturnsPolicy) {
-    risk += 14;
-  }
+  applyRiskFactor(!hasReturnsPolicy, {
+    id: "returns_missing",
+    label: "Return policy not located",
+    detail:
+      "Backstop could not locate a clearly labelled return or refund policy from the product page.",
+    impactPoints: 14,
+  });
 
-  if (returnShippingPaidByCustomer) {
-    risk += 12;
-  }
+  applyRiskFactor(returnShippingPaidByCustomer, {
+    id: "return_shipping_cost",
+    label: "Customer-paid return shipping",
+    detail:
+      "The return policy indicates that the customer may need to pay return-shipping costs.",
+    impactPoints: 12,
+  });
 
-  if (internationalReturn) {
-    risk += 10;
-  }
+  applyRiskFactor(internationalReturn, {
+    id: "international_return",
+    label: "International return route",
+    detail:
+      "The return language suggests that a refund may require an international or overseas return.",
+    impactPoints: 10,
+  });
 
-  if (returnWindowDays !== null && returnWindowDays < 14) {
-    risk += 10;
-  }
+  applyRiskFactor(returnWindowDays !== null && returnWindowDays < 14, {
+    id: "short_return_window",
+    label: "Short return window",
+    detail:
+      "The detected return window is shorter than 14 days.",
+    impactPoints: 10,
+  });
 
-  if (discountLanguageDetected) {
-    risk += 8;
-  }
+  applyRiskFactor(discountLanguageDetected, {
+    id: "discount_unverified",
+    label: "Discount not independently verified",
+    detail:
+      "The page uses sale or discount language, but Backstop does not yet have independent historical-price data to verify the claimed saving.",
+    impactPoints: 8,
+  });
 
-  if (mainstreamPayments.length === 0) {
-    risk += 7;
-  }
+  applyRiskFactor(mainstreamPayments.length === 0, {
+    id: "payment_visibility",
+    label: "Payment protection not confirmed",
+    detail:
+      "No mainstream payment method was reliably detected on the inspected public page.",
+    impactPoints: 7,
+  });
 
-  if (!hasContactRoute) {
-    risk += 7;
-  }
+  applyRiskFactor(!hasContactRoute, {
+    id: "contact_route",
+    label: "Merchant contact route not obvious",
+    detail:
+      "The inspected page did not expose an obvious support, email, telephone or customer-service route.",
+    impactPoints: 7,
+  });
 
-  if (!https) {
-    risk += 12;
-  }
+  applyRiskFactor(!https, {
+    id: "https_missing",
+    label: "HTTPS not in use",
+    detail:
+      "The final merchant page did not use HTTPS.",
+    impactPoints: 12,
+  });
 
-  if (price.amount === null) {
-    risk += 5;
-  }
+  applyRiskFactor(price.amount === null, {
+    id: "price_missing",
+    label: "Product price not reliably extracted",
+    detail:
+      "Backstop could not reliably extract the product price from the inspected page.",
+    impactPoints: 5,
+  });
 
-  if (returnWindowDays !== null && returnWindowDays >= 30) {
-    risk -= 4;
-  }
+  applyRiskFactor(returnWindowDays !== null && returnWindowDays >= 30, {
+    id: "return_window_30_plus",
+    label: "30+ day return window",
+    detail:
+      "A return window of at least 30 days was detected, which reduces transaction friction.",
+    impactPoints: -4,
+  });
 
-  risk = clamp(risk);
+  const risk = clamp(rawRisk);
 
   let evidenceCoverage = 0;
 
@@ -1334,6 +1414,12 @@ export async function analyzeUrl(
     evidenceCoveragePercent: evidenceCoverage,
 
     riskPercent: risk,
+
+    riskBreakdown: {
+      baselinePoints: RISK_BASELINE_POINTS,
+      uncappedPoints: rawRisk,
+      factors: riskFactors,
+    },
 
     verdict,
 

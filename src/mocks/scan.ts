@@ -20,6 +20,48 @@ export const demoScanResponse: RawScanResponseDto = {
 
   riskPercent: 68,
 
+  riskBreakdown: {
+    baselinePoints: 16,
+    uncappedPoints: 68,
+    factors: [
+      {
+        id: 'demo_recurring',
+        label: 'Recurring commitment language',
+        detail:
+          'The demo checkout includes a recurring membership after the introductory period.',
+        impactPoints: 29,
+      },
+      {
+        id: 'demo_return_shipping',
+        label: 'Customer-paid return shipping',
+        detail:
+          'The demo return policy requires the customer to cover international return shipping.',
+        impactPoints: 12,
+      },
+      {
+        id: 'demo_discount',
+        label: 'Discount not independently verified',
+        detail:
+          'The demo store presents a large discount without independent historical-price verification.',
+        impactPoints: 8,
+      },
+      {
+        id: 'demo_returns',
+        label: '30+ day return window',
+        detail:
+          'The demo return window offsets some transaction friction.',
+        impactPoints: -4,
+      },
+      {
+        id: 'demo_adjustment',
+        label: 'Additional demo transaction friction',
+        detail:
+          'The demo fixture includes additional transaction-friction signals to reach its illustrative risk score.',
+        impactPoints: 7,
+      },
+    ],
+  },
+
   verdict: 'Proceed carefully',
 
   scannedAtIso: '2026-09-20T08:15:00.000Z',
