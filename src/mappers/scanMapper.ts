@@ -359,6 +359,11 @@ export const mapScanResponse = (
   return {
     id: dto.scanId,
 
+    scanMethod:
+      dto.scanMethod === 'BROWSER_RENDERED'
+        ? 'browser'
+        : 'static',
+
     merchant:
       dto.merchantName,
 
