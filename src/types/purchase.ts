@@ -33,6 +33,21 @@ export interface RawSignalDto {
   statusLabel: string;
 }
 
+export interface RawDomainIntelligenceDto {
+  registrableDomain: string;
+  registrationDateIso: string | null;
+  domainAgeDays: number | null;
+  registrarName: string | null;
+  rdapSourceUrl: string | null;
+  nameserverCount: number | null;
+  mailServerCount: number | null;
+  addressCount: number | null;
+  tlsReachable: boolean;
+  tlsAuthorized: boolean | null;
+  tlsValidToIso: string | null;
+  tlsIssuer: string | null;
+}
+
 export interface RawScanResponseDto {
   scanId: string;
 
@@ -44,7 +59,7 @@ export interface RawScanResponseDto {
   currency: string | null;
   amount: number | null;
 
-  confidencePercent: number;
+  evidenceCoveragePercent: number;
   riskPercent: number;
 
   verdict: string;
@@ -53,6 +68,7 @@ export interface RawScanResponseDto {
 
   signals: RawSignalDto[];
   findings: RawFindingDto[];
+  domainIntelligence: RawDomainIntelligenceDto;
 
   protection: {
     returnWindowDays:
@@ -91,6 +107,17 @@ export interface ScanSignal {
   statusLabel: string;
 }
 
+export interface DomainIntelligence {
+  registrableDomain: string;
+  registrationDateLabel: string;
+  ageLabel: string;
+  registrarLabel: string;
+  rdapSourceUrl: string | null;
+  dnsLabel: string;
+  tlsLabel: string;
+  tlsState: 'valid' | 'issue' | 'unavailable';
+}
+
 export interface PurchaseProtection {
   returnWindowLabel: string;
   warrantyLabel: string;
@@ -110,7 +137,7 @@ export interface PurchaseScan {
 
   amountLabel: string;
 
-  confidence: number;
+  evidenceCoverage: number;
   risk: number;
 
   verdict: string;
@@ -119,6 +146,7 @@ export interface PurchaseScan {
 
   signals: ScanSignal[];
   findings: Finding[];
+  domainIntelligence: DomainIntelligence;
 
   protection:
     PurchaseProtection;

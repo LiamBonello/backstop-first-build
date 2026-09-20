@@ -16,7 +16,7 @@ export const demoScanResponse: RawScanResponseDto = {
 
   amount: 189,
 
-  confidencePercent: 94,
+  evidenceCoveragePercent: 92,
 
   riskPercent: 68,
 
@@ -56,6 +56,21 @@ export const demoScanResponse: RawScanResponseDto = {
       statusLabel: 'Mainstream methods',
     },
   ],
+
+  domainIntelligence: {
+    registrableDomain: 'novalume-store.com',
+    registrationDateIso: '2026-03-21T10:00:00.000Z',
+    domainAgeDays: 183,
+    registrarName: 'Demo Registrar',
+    rdapSourceUrl: null,
+    nameserverCount: 2,
+    mailServerCount: 1,
+    addressCount: 2,
+    tlsReachable: true,
+    tlsAuthorized: true,
+    tlsValidToIso: '2026-12-20T23:59:59.000Z',
+    tlsIssuer: 'Demo CA',
+  },
 
   findings: [
     {

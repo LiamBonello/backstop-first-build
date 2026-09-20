@@ -6,6 +6,7 @@ import type {
   RawScanResponseDto,
   RawSignalDto,
 } from "../src/types/purchase";
+import { inspectDomain } from "./domainIntelligence";
 import { fetchHtml } from "./fetchHtml";
 
 const MAIN_PAGE_MAX_BYTES = 10_000_000;
@@ -557,6 +558,19 @@ function createSignal(
   };
 }
 
+function formatDomainAgeForFinding(days: number): string {
+  if (days < 60) {
+    return `${days} day${days === 1 ? "" : "s"}`;
+  }
+
+  if (days < 730) {
+    const months = Math.max(1, Math.floor(days / 30));
+    return `${months} month${months === 1 ? "" : "s"}`;
+  }
+
+  return `${(days / 365).toFixed(1)} years`;
+}
+
 function extractPaymentMethods(
   $: cheerio.CheerioAPI,
   visibleText: string,
@@ -678,7 +692,10 @@ export async function analyzeUrl(
 
   const policyCandidates = discoverPolicies($, page.finalUrl);
 
-  const policyPages = await fetchPolicyPages(policyCandidates);
+  const [policyPages, domainIntelligence] = await Promise.all([
+    fetchPolicyPages(policyCandidates),
+    inspectDomain(page.finalUrl),
+  ]);
 
   const policyText = policyPages.map((policy) => policy.text).join(" ");
 
@@ -754,6 +771,22 @@ export async function analyzeUrl(
 
   let risk = 16;
 
+  if (
+    domainIntelligence.domainAgeDays !== null &&
+    domainIntelligence.domainAgeDays < 30
+  ) {
+    risk += 20;
+  } else if (
+    domainIntelligence.domainAgeDays !== null &&
+    domainIntelligence.domainAgeDays < 180
+  ) {
+    risk += 10;
+  }
+
+  if (domainIntelligence.tlsAuthorized === false) {
+    risk += 18;
+  }
+
   if (recurringDetected) {
     risk += 29;
   }
@@ -800,44 +833,82 @@ export async function analyzeUrl(
 
   risk = clamp(risk);
 
-  let confidence = 43;
+  let evidenceCoverage = 0;
 
   if (productName !== "Product or offer") {
-    confidence += 10;
+    evidenceCoverage += 10;
   }
 
   if (price.amount !== null) {
-    confidence += 13;
+    evidenceCoverage += 14;
   }
 
-  if (ogSiteName || structuredProduct.merchantName) {
-    confidence += 7;
+  if (ogSiteName || applicationName || structuredProduct.merchantName) {
+    evidenceCoverage += 8;
   }
 
   if (policyPages.length > 0) {
-    confidence += 10;
+    evidenceCoverage += 8;
   }
 
   if (returnWindowDays !== null) {
-    confidence += 7;
+    evidenceCoverage += 8;
   }
 
   if (hasTermsPolicy) {
-    confidence += 4;
+    evidenceCoverage += 7;
   }
 
   if (mainstreamPayments.length > 0) {
-    confidence += 3;
+    evidenceCoverage += 7;
   }
 
   if (hasContactRoute) {
-    confidence += 3;
+    evidenceCoverage += 6;
   }
 
-  confidence = clamp(confidence, 35, 96);
+  if (domainIntelligence.registrationDateIso !== null) {
+    evidenceCoverage += 14;
+  }
+
+  if (domainIntelligence.registrarName !== null) {
+    evidenceCoverage += 5;
+  }
+
+  if (domainIntelligence.nameserverCount !== null) {
+    evidenceCoverage += 5;
+  }
+
+  if (domainIntelligence.tlsReachable) {
+    evidenceCoverage += 8;
+  }
+
+  evidenceCoverage = clamp(evidenceCoverage);
+
+  const domainAgeIdentityAdjustment =
+    domainIntelligence.domainAgeDays === null
+      ? 0
+      : domainIntelligence.domainAgeDays < 30
+        ? -15
+        : domainIntelligence.domainAgeDays < 180
+          ? -5
+          : domainIntelligence.domainAgeDays >= 365
+            ? 10
+            : 5;
 
   const identityScore = clamp(
-    35 + (https ? 25 : 0) + (hasContactRoute ? 25 : 0) + (ogSiteName ? 15 : 0),
+    25 +
+      (https ? 15 : 0) +
+      (hasContactRoute ? 15 : 0) +
+      (ogSiteName || applicationName || structuredProduct.merchantName ? 10 : 0) +
+      (domainIntelligence.registrationDateIso !== null ? 10 : 0) +
+      (domainIntelligence.registrarName !== null ? 5 : 0) +
+      (domainIntelligence.nameserverCount !== null &&
+      domainIntelligence.nameserverCount > 0
+        ? 5
+        : 0) +
+      (domainIntelligence.tlsAuthorized === true ? 15 : 0) +
+      domainAgeIdentityAdjustment,
   );
 
   const pricingScore = clamp(
@@ -886,7 +957,9 @@ export async function analyzeUrl(
         ? "Unclear"
         : returnShippingPaidByCustomer || internationalReturn
           ? "Friction"
-          : "Visible",
+          : returnWindowDays !== null
+            ? `${returnWindowDays} days`
+            : "Visible",
     ),
 
     createSignal(
@@ -901,7 +974,7 @@ export async function analyzeUrl(
       "Protection",
       protectionScore,
       mainstreamPayments.length > 0
-        ? "Mainstream methods"
+        ? `${mainstreamPayments.length} methods found`
         : "Limited visibility",
     ),
   ];
@@ -1086,14 +1159,71 @@ export async function analyzeUrl(
       : "Merchant contact route was not obvious",
 
     detail: hasContactRoute
-      ? "The inspected page exposes a contact, support, email or telephone route. Backstop has not yet independently verified the legal entity behind the domain."
-      : "Backstop did not find an obvious contact, support, email or telephone route on the inspected page. Independent company and domain-age verification will be added as separate data sources.",
+      ? "The inspected page exposes a contact, support, email or telephone route. Backstop separately checks domain registration, DNS and TLS; company-registry verification is not yet included."
+      : "Backstop did not find an obvious contact, support, email or telephone route on the inspected page. Domain registration, DNS and TLS are checked independently, but company-registry verification is not yet included.",
 
     sourceLabel: "Merchant page",
 
     sourceUrl: page.finalUrl.toString(),
 
     severityCode: hasContactRoute ? "GOOD" : "MEDIUM",
+  });
+
+  const domainAge = domainIntelligence.domainAgeDays;
+
+  const domainSeverity: RawFindingDto["severityCode"] =
+    domainIntelligence.tlsAuthorized === false ||
+    (domainAge !== null && domainAge < 30)
+      ? "HIGH"
+      : domainAge !== null && domainAge < 180
+        ? "MEDIUM"
+        : domainAge !== null
+          ? "GOOD"
+          : "INFO";
+
+  const domainHeadline =
+    domainIntelligence.tlsAuthorized === false
+      ? "TLS certificate validation issue detected"
+      : domainAge !== null && domainAge < 30
+        ? `Domain registered only ${formatDomainAgeForFinding(domainAge)} ago`
+        : domainAge !== null && domainAge < 180
+          ? "Relatively recent domain registration"
+          : domainAge !== null
+            ? `Domain registration dates back ${formatDomainAgeForFinding(domainAge)}`
+            : "Independent registration date could not be retrieved";
+
+  const domainDetailParts: string[] = [];
+
+  if (domainIntelligence.registrarName) {
+    domainDetailParts.push(
+      `RDAP identifies the registrar as ${domainIntelligence.registrarName}.`,
+    );
+  }
+
+  if (domainIntelligence.nameserverCount !== null) {
+    domainDetailParts.push(
+      `DNS exposes ${domainIntelligence.nameserverCount} nameserver${domainIntelligence.nameserverCount === 1 ? "" : "s"}.`,
+    );
+  }
+
+  if (domainIntelligence.tlsAuthorized === true) {
+    domainDetailParts.push("The TLS certificate validated successfully.");
+  } else if (domainIntelligence.tlsAuthorized === false) {
+    domainDetailParts.push("The TLS certificate did not validate successfully.");
+  }
+
+  domainDetailParts.push(
+    "Domain age and infrastructure are identity signals, not proof that a merchant is trustworthy.",
+  );
+
+  findings.push({
+    id: "finding_domain",
+    category: "Domain",
+    headline: domainHeadline,
+    detail: domainDetailParts.join(" "),
+    sourceLabel: "RDAP / DNS / TLS",
+    sourceUrl: domainIntelligence.rdapSourceUrl,
+    severityCode: domainSeverity,
   });
 
   const currency =
@@ -1127,7 +1257,7 @@ export async function analyzeUrl(
 
     amount: price.amount,
 
-    confidencePercent: confidence,
+    evidenceCoveragePercent: evidenceCoverage,
 
     riskPercent: risk,
 
@@ -1138,6 +1268,8 @@ export async function analyzeUrl(
     signals,
 
     findings,
+
+    domainIntelligence,
 
     protection: {
       returnWindowDays,

@@ -24,6 +24,10 @@ import type {
 } from '../types/purchase';
 
 import {
+  DomainIntelligenceCard,
+} from './DomainIntelligenceCard';
+
+import {
   FindingCard,
 } from './FindingCard';
 
@@ -247,7 +251,7 @@ export function ScanResult({
                   <VerifiedUserOutlinedIcon />
                 }
 
-                label={`${scan.confidence}% analysis confidence`}
+                label={`${scan.evidenceCoverage}% evidence coverage`}
 
                 sx={{
                   bgcolor:
@@ -534,6 +538,12 @@ export function ScanResult({
           <TransactionProfile
             signals={
               scan.signals
+            }
+          />
+
+          <DomainIntelligenceCard
+            intelligence={
+              scan.domainIntelligence
             }
           />
 

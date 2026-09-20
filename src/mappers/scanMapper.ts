@@ -1,4 +1,5 @@
 import type {
+  DomainIntelligence,
   Finding,
   PurchaseScan,
   RawFindingDto,
@@ -88,6 +89,81 @@ const mapSignal = (
     signal.statusLabel,
 });
 
+const formatDomainAge = (days: number | null): string => {
+  if (days === null) {
+    return 'Not available';
+  }
+
+  if (days < 60) {
+    return `${days} day${days === 1 ? '' : 's'}`;
+  }
+
+  if (days < 730) {
+    const months = Math.max(1, Math.floor(days / 30));
+    return `${months} month${months === 1 ? '' : 's'}`;
+  }
+
+  return `${(days / 365).toFixed(1)} years`;
+};
+
+const mapDomainIntelligence = (
+  dto: RawScanResponseDto['domainIntelligence'],
+): DomainIntelligence => {
+  const dnsParts: string[] = [];
+
+  if (dto.nameserverCount !== null) {
+    dnsParts.push(
+      `${dto.nameserverCount} nameserver${dto.nameserverCount === 1 ? '' : 's'}`,
+    );
+  }
+
+  if (dto.mailServerCount !== null) {
+    dnsParts.push(
+      `${dto.mailServerCount} mail route${dto.mailServerCount === 1 ? '' : 's'}`,
+    );
+  }
+
+  if (dto.addressCount !== null) {
+    dnsParts.push(
+      `${dto.addressCount} address${dto.addressCount === 1 ? '' : 'es'}`,
+    );
+  }
+
+  const tlsState: DomainIntelligence['tlsState'] =
+    dto.tlsAuthorized === true
+      ? 'valid'
+      : dto.tlsAuthorized === false
+        ? 'issue'
+        : 'unavailable';
+
+  const tlsLabel =
+    dto.tlsAuthorized === true
+      ? dto.tlsValidToIso
+        ? `Valid until ${formatDate(dto.tlsValidToIso)}`
+        : 'Certificate validated'
+      : dto.tlsAuthorized === false
+        ? 'Certificate validation issue'
+        : dto.tlsReachable
+          ? 'Certificate details unavailable'
+          : 'TLS probe unavailable';
+
+  return {
+    registrableDomain: dto.registrableDomain,
+    registrationDateLabel: dto.registrationDateIso
+      ? formatDate(dto.registrationDateIso)
+      : 'Not available',
+    ageLabel: formatDomainAge(dto.domainAgeDays),
+    registrarLabel: dto.registrarName ?? 'Not available',
+    rdapSourceUrl: dto.rdapSourceUrl,
+    dnsLabel: dnsParts.length > 0 ? dnsParts.join(' · ') : 'Not available',
+    tlsLabel:
+      dto.tlsIssuer && tlsState === 'valid'
+        ? `${tlsLabel} · ${dto.tlsIssuer}`
+        : tlsLabel,
+    tlsState,
+  };
+};
+
 export const mapScanResponse = (
   dto: RawScanResponseDto,
 ): PurchaseScan => {
@@ -121,8 +197,8 @@ export const mapScanResponse = (
           )
         : 'Price not detected',
 
-    confidence:
-      dto.confidencePercent,
+    evidenceCoverage:
+      dto.evidenceCoveragePercent,
 
     risk:
       dto.riskPercent,
@@ -143,6 +219,11 @@ export const mapScanResponse = (
     findings:
       dto.findings.map(
         mapFinding,
+      ),
+
+    domainIntelligence:
+      mapDomainIntelligence(
+        dto.domainIntelligence,
       ),
 
     protection: {
