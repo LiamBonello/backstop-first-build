@@ -254,7 +254,7 @@ export function ProtectionDrawer({
               1.65,
           }}
         >
-          Add the dates you know. Backstop will turn the detected terms into deadlines and keep them on this device.
+          Add the dates you know. Backstop will turn the detected terms into deadlines and save them in your local PostgreSQL database.
         </Typography>
 
         <Stack
