@@ -1,17 +1,36 @@
 import type {
+  CreateProtectedPurchaseRequestDto,
   DashboardMetric,
-  Finding,
   ProtectedPurchase,
+  ProtectedPurchaseRecordDto,
   ProtectionEvidenceSnapshot,
   ProtectionInput,
   ProtectionTimelineItem,
+  ProtectionTermsDto,
   PurchaseLifecycleStatus,
   PurchaseScan,
 } from '../types/purchase';
 
-const STORAGE_KEY = 'backstop.protected-purchases.v1';
+const apiBaseUrl =
+  (
+    import.meta.env
+      .VITE_API_BASE_URL ??
+    ''
+  ).replace(
+    /\/$/,
+    '',
+  );
 
-interface StoredProtectedPurchaseV1 {
+const CLIENT_ID_KEY =
+  'backstop.client-id.v1';
+
+const LEGACY_STORAGE_KEY =
+  'backstop.protected-purchases.v1';
+
+const MIGRATION_KEY =
+  'backstop.postgres-migration.v1';
+
+interface LegacyProtectedPurchaseV1 {
   version: 1;
   id: string;
   sourceScanId: string;
@@ -29,14 +48,7 @@ interface StoredProtectedPurchaseV1 {
   createdAtIso: string;
 }
 
-interface StoredProtectionTerms {
-  returnWindowDays: number | null;
-  warrantyMonths: number | null;
-  renewalAmount: number | null;
-  renewalInterval: string | null;
-}
-
-interface StoredProtectedPurchaseV2 {
+interface LegacyProtectedPurchaseV2 {
   version: 2;
   id: string;
   sourceScanId: string;
@@ -51,17 +63,18 @@ interface StoredProtectedPurchaseV2 {
   returnDeadline: string | null;
   warrantyDeadline: string | null;
   renewalDeadline: string | null;
-  protectionTerms: StoredProtectionTerms;
+  protectionTerms: ProtectionTermsDto;
   lifecycleStatus: PurchaseLifecycleStatus;
   lifecycleUpdatedAtIso: string | null;
   evidenceSnapshot: ProtectionEvidenceSnapshot | null;
   createdAtIso: string;
 }
 
-type StoredProtectedPurchase = StoredProtectedPurchaseV2;
-
 interface DeadlineEntry {
-  kind: 'Return' | 'Warranty' | 'Renewal';
+  kind:
+    | 'Return'
+    | 'Warranty'
+    | 'Renewal';
   date: string;
 }
 
@@ -69,25 +82,126 @@ const lifecycleLabels: Record<
   PurchaseLifecycleStatus,
   string
 > = {
-  active: 'Active protection',
-  kept: 'Kept',
-  returned: 'Returned',
-  refunded: 'Refunded',
+  active:
+    'Active protection',
+  kept:
+    'Kept',
+  returned:
+    'Returned',
+  refunded:
+    'Refunded',
 };
 
-const isDateOnly = (value: unknown): value is string =>
-  typeof value === 'string' &&
-  /^\d{4}-\d{2}-\d{2}$/.test(value);
+const getClientId = (): string => {
+  const existing =
+    window.localStorage.getItem(
+      CLIENT_ID_KEY,
+    );
 
-const isNullableDateOnly = (value: unknown): value is string | null =>
-  value === null || isDateOnly(value);
+  if (existing) {
+    return existing;
+  }
 
-const isNullableNumber = (value: unknown): value is number | null =>
+  const created =
+    crypto.randomUUID();
+
+  window.localStorage.setItem(
+    CLIENT_ID_KEY,
+    created,
+  );
+
+  return created;
+};
+
+const requestJson = async <T>(
+  path: string,
+  init?: RequestInit,
+): Promise<T> => {
+  const response =
+    await fetch(
+      `${apiBaseUrl}${path}`,
+      {
+        ...init,
+        headers: {
+          'content-type':
+            'application/json',
+          'x-backstop-client-id':
+            getClientId(),
+          ...init?.headers,
+        },
+      },
+    );
+
+  if (!response.ok) {
+    let message =
+      'Backstop could not complete the protection request.';
+
+    try {
+      const payload =
+        await response.json() as {
+          error?: unknown;
+        };
+
+      if (
+        typeof payload.error ===
+        'string'
+      ) {
+        message =
+          payload.error;
+      }
+    } catch {
+      // Some error responses may not contain JSON.
+    }
+
+    throw new Error(
+      message,
+    );
+  }
+
+  if (
+    response.status === 204
+  ) {
+    return undefined as T;
+  }
+
+  return await response.json() as T;
+};
+
+const isDateOnly = (
+  value: unknown,
+): value is string =>
+  typeof value ===
+    'string' &&
+  /^\d{4}-\d{2}-\d{2}$/.test(
+    value,
+  );
+
+const isNullableDateOnly = (
+  value: unknown,
+): value is string | null =>
   value === null ||
-  (typeof value === 'number' && Number.isFinite(value));
+  isDateOnly(
+    value,
+  );
 
-const isNullableString = (value: unknown): value is string | null =>
-  value === null || typeof value === 'string';
+const isNullableNumber = (
+  value: unknown,
+): value is number | null =>
+  value === null ||
+  (
+    typeof value ===
+      'number' &&
+    Number.isFinite(
+      value,
+    )
+  );
+
+const isNullableString = (
+  value: unknown,
+): value is string | null =>
+  value === null ||
+  typeof value ===
+    'string';
 
 const isLifecycleStatus = (
   value: unknown,
@@ -97,150 +211,6 @@ const isLifecycleStatus = (
   value === 'returned' ||
   value === 'refunded';
 
-const isFinding = (value: unknown): value is Finding => {
-  if (
-    typeof value !== 'object' ||
-    value === null ||
-    Array.isArray(value)
-  ) {
-    return false;
-  }
-
-  const record = value as Record<string, unknown>;
-
-  return (
-    typeof record.id === 'string' &&
-    typeof record.category === 'string' &&
-    typeof record.title === 'string' &&
-    typeof record.detail === 'string' &&
-    typeof record.sourceLabel === 'string' &&
-    isNullableString(record.sourceUrl) &&
-    (
-      record.severity === 'critical' ||
-      record.severity === 'warning' ||
-      record.severity === 'positive' ||
-      record.severity === 'neutral'
-    )
-  );
-};
-
-const isEvidenceSnapshot = (
-  value: unknown,
-): value is ProtectionEvidenceSnapshot => {
-  if (
-    typeof value !== 'object' ||
-    value === null ||
-    Array.isArray(value)
-  ) {
-    return false;
-  }
-
-  const record = value as Record<string, unknown>;
-
-  return (
-    typeof record.risk === 'number' &&
-    Number.isFinite(record.risk) &&
-    typeof record.verdict === 'string' &&
-    typeof record.evidenceCoverage === 'number' &&
-    Number.isFinite(record.evidenceCoverage) &&
-    typeof record.scannedAtLabel === 'string' &&
-    Array.isArray(record.findings) &&
-    record.findings.every(isFinding)
-  );
-};
-
-const isProtectionTerms = (
-  value: unknown,
-): value is StoredProtectionTerms => {
-  if (
-    typeof value !== 'object' ||
-    value === null ||
-    Array.isArray(value)
-  ) {
-    return false;
-  }
-
-  const record = value as Record<string, unknown>;
-
-  return (
-    isNullableNumber(record.returnWindowDays) &&
-    isNullableNumber(record.warrantyMonths) &&
-    isNullableNumber(record.renewalAmount) &&
-    isNullableString(record.renewalInterval)
-  );
-};
-
-const isStoredProtectedPurchaseV1 = (
-  value: unknown,
-): value is StoredProtectedPurchaseV1 => {
-  if (
-    typeof value !== 'object' ||
-    value === null ||
-    Array.isArray(value)
-  ) {
-    return false;
-  }
-
-  const record = value as Record<string, unknown>;
-
-  return (
-    record.version === 1 &&
-    typeof record.id === 'string' &&
-    typeof record.sourceScanId === 'string' &&
-    typeof record.merchant === 'string' &&
-    typeof record.domain === 'string' &&
-    typeof record.product === 'string' &&
-    isNullableNumber(record.amount) &&
-    isNullableString(record.currency) &&
-    typeof record.amountLabel === 'string' &&
-    isDateOnly(record.purchaseDate) &&
-    isNullableDateOnly(record.deliveryDate) &&
-    isNullableDateOnly(record.returnDeadline) &&
-    isNullableDateOnly(record.warrantyDeadline) &&
-    isNullableDateOnly(record.renewalDeadline) &&
-    typeof record.createdAtIso === 'string'
-  );
-};
-
-const isStoredProtectedPurchaseV2 = (
-  value: unknown,
-): value is StoredProtectedPurchaseV2 => {
-  if (
-    typeof value !== 'object' ||
-    value === null ||
-    Array.isArray(value)
-  ) {
-    return false;
-  }
-
-  const record = value as Record<string, unknown>;
-
-  return (
-    record.version === 2 &&
-    typeof record.id === 'string' &&
-    typeof record.sourceScanId === 'string' &&
-    typeof record.merchant === 'string' &&
-    typeof record.domain === 'string' &&
-    typeof record.product === 'string' &&
-    isNullableNumber(record.amount) &&
-    isNullableString(record.currency) &&
-    typeof record.amountLabel === 'string' &&
-    isDateOnly(record.purchaseDate) &&
-    isNullableDateOnly(record.deliveryDate) &&
-    isNullableDateOnly(record.returnDeadline) &&
-    isNullableDateOnly(record.warrantyDeadline) &&
-    isNullableDateOnly(record.renewalDeadline) &&
-    isProtectionTerms(record.protectionTerms) &&
-    isLifecycleStatus(record.lifecycleStatus) &&
-    isNullableString(record.lifecycleUpdatedAtIso) &&
-    (
-      record.evidenceSnapshot === null ||
-      isEvidenceSnapshot(record.evidenceSnapshot)
-    ) &&
-    typeof record.createdAtIso === 'string'
-  );
-};
-
 const parseDateOnlyParts = (
   value: string,
 ): {
@@ -248,8 +218,14 @@ const parseDateOnlyParts = (
   month: number;
   day: number;
 } => {
-  const [year, month, day] =
-    value.split('-').map(Number);
+  const [
+    year,
+    month,
+    day,
+  ] =
+    value
+      .split('-')
+      .map(Number);
 
   return {
     year,
@@ -265,7 +241,10 @@ const dateOnlyToUtcMs = (
     year,
     month,
     day,
-  } = parseDateOnlyParts(value);
+  } =
+    parseDateOnlyParts(
+      value,
+    );
 
   return Date.UTC(
     year,
@@ -279,15 +258,24 @@ const utcMsToDateOnly = (
 ): string =>
   new Date(value)
     .toISOString()
-    .slice(0, 10);
+    .slice(
+      0,
+      10,
+    );
 
 const addDays = (
   date: string,
   days: number,
 ): string =>
   utcMsToDateOnly(
-    dateOnlyToUtcMs(date) +
-      days * 24 * 60 * 60 * 1000,
+    dateOnlyToUtcMs(
+      date,
+    ) +
+      days *
+        24 *
+        60 *
+        60 *
+        1000,
   );
 
 const addMonths = (
@@ -298,7 +286,10 @@ const addMonths = (
     year,
     month,
     day,
-  } = parseDateOnlyParts(date);
+  } =
+    parseDateOnlyParts(
+      date,
+    );
 
   const targetFirst =
     new Date(
@@ -328,7 +319,10 @@ const addMonths = (
     Date.UTC(
       targetYear,
       targetMonth,
-      Math.min(day, lastDay),
+      Math.min(
+        day,
+        lastDay,
+      ),
     ),
   );
 };
@@ -341,18 +335,32 @@ const addRenewalInterval = (
     return null;
   }
 
-  switch (interval.toLowerCase()) {
+  switch (
+    interval.toLowerCase()
+  ) {
     case 'day':
-      return addDays(date, 1);
+      return addDays(
+        date,
+        1,
+      );
 
     case 'week':
-      return addDays(date, 7);
+      return addDays(
+        date,
+        7,
+      );
 
     case 'month':
-      return addMonths(date, 1);
+      return addMonths(
+        date,
+        1,
+      );
 
     case 'year':
-      return addMonths(date, 12);
+      return addMonths(
+        date,
+        12,
+      );
 
     default:
       return null;
@@ -360,20 +368,28 @@ const addRenewalInterval = (
 };
 
 export const todayDateValue = (): string => {
-  const today = new Date();
+  const today =
+    new Date();
 
   const year =
     today.getFullYear();
 
   const month =
     String(
-      today.getMonth() + 1,
-    ).padStart(2, '0');
+      today.getMonth() +
+        1,
+    ).padStart(
+      2,
+      '0',
+    );
 
   const day =
     String(
       today.getDate(),
-    ).padStart(2, '0');
+    ).padStart(
+      2,
+      '0',
+    );
 
   return `${year}-${month}-${day}`;
 };
@@ -384,10 +400,14 @@ const formatDateOnly = (
   new Intl.DateTimeFormat(
     'en-GB',
     {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      timeZone: 'UTC',
+      day:
+        '2-digit',
+      month:
+        'short',
+      year:
+        'numeric',
+      timeZone:
+        'UTC',
     },
   ).format(
     new Date(
@@ -401,9 +421,12 @@ const formatIsoDate = (
   new Intl.DateTimeFormat(
     'en-GB',
     {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
+      day:
+        '2-digit',
+      month:
+        'short',
+      year:
+        'numeric',
     },
   ).format(
     new Date(value),
@@ -414,179 +437,25 @@ const daysUntil = (
 ): number =>
   Math.round(
     (
-      dateOnlyToUtcMs(value) -
+      dateOnlyToUtcMs(
+        value,
+      ) -
       dateOnlyToUtcMs(
         todayDateValue(),
       )
     ) /
-      (24 * 60 * 60 * 1000),
-  );
-
-const inferReturnWindowDays = (
-  record: StoredProtectedPurchaseV1,
-): number | null => {
-  if (!record.returnDeadline) {
-    return null;
-  }
-
-  const basis =
-    record.deliveryDate ??
-    record.purchaseDate;
-
-  const difference =
-    Math.round(
       (
-        dateOnlyToUtcMs(
-          record.returnDeadline,
-        ) -
-        dateOnlyToUtcMs(
-          basis,
-        )
-      ) /
-        (24 * 60 * 60 * 1000),
-    );
-
-  return difference >= 1 &&
-    difference <= 180
-    ? difference
-    : null;
-};
-
-const inferWarrantyMonths = (
-  record: StoredProtectedPurchaseV1,
-): number | null => {
-  if (!record.warrantyDeadline) {
-    return null;
-  }
-
-  for (
-    let months = 1;
-    months <= 120;
-    months += 1
-  ) {
-    if (
-      addMonths(
-        record.purchaseDate,
-        months,
-      ) ===
-      record.warrantyDeadline
-    ) {
-      return months;
-    }
-  }
-
-  return null;
-};
-
-const inferRenewalInterval = (
-  record: StoredProtectedPurchaseV1,
-): string | null => {
-  if (!record.renewalDeadline) {
-    return null;
-  }
-
-  const candidates = [
-    'day',
-    'week',
-    'month',
-    'year',
-  ];
-
-  return (
-    candidates.find(
-      (candidate) =>
-        addRenewalInterval(
-          record.purchaseDate,
-          candidate,
-        ) ===
-        record.renewalDeadline,
-    ) ?? null
+        24 *
+        60 *
+        60 *
+        1000
+      ),
   );
-};
-
-const migrateV1 = (
-  record: StoredProtectedPurchaseV1,
-): StoredProtectedPurchaseV2 => ({
-  version: 2,
-  id: record.id,
-  sourceScanId:
-    record.sourceScanId,
-  merchant:
-    record.merchant,
-  domain:
-    record.domain,
-  product:
-    record.product,
-  amount:
-    record.amount,
-  currency:
-    record.currency,
-  amountLabel:
-    record.amountLabel,
-  purchaseDate:
-    record.purchaseDate,
-  deliveryDate:
-    record.deliveryDate,
-  returnDeadline:
-    record.returnDeadline,
-  warrantyDeadline:
-    record.warrantyDeadline,
-  renewalDeadline:
-    record.renewalDeadline,
-  protectionTerms: {
-    returnWindowDays:
-      inferReturnWindowDays(
-        record,
-      ),
-    warrantyMonths:
-      inferWarrantyMonths(
-        record,
-      ),
-    renewalAmount:
-      null,
-    renewalInterval:
-      inferRenewalInterval(
-        record,
-      ),
-  },
-  lifecycleStatus:
-    'active',
-  lifecycleUpdatedAtIso:
-    null,
-  evidenceSnapshot:
-    null,
-  createdAtIso:
-    record.createdAtIso,
-});
-
-const normalizeStoredPurchase = (
-  value: unknown,
-): StoredProtectedPurchase | null => {
-  if (
-    isStoredProtectedPurchaseV2(
-      value,
-    )
-  ) {
-    return value;
-  }
-
-  if (
-    isStoredProtectedPurchaseV1(
-      value,
-    )
-  ) {
-    return migrateV1(
-      value,
-    );
-  }
-
-  return null;
-};
 
 const getDeadlineEntries = (
   purchase:
     Pick<
-      StoredProtectedPurchase,
+      ProtectedPurchaseRecordDto,
       | 'returnDeadline'
       | 'warrantyDeadline'
       | 'renewalDeadline'
@@ -602,7 +471,9 @@ const getDeadlineEntries = (
     return [];
   }
 
-  const entries: DeadlineEntry[] = [];
+  const entries:
+    DeadlineEntry[] =
+      [];
 
   if (
     purchase.returnDeadline &&
@@ -610,7 +481,8 @@ const getDeadlineEntries = (
       'kept'
   ) {
     entries.push({
-      kind: 'Return',
+      kind:
+        'Return',
       date:
         purchase.returnDeadline,
     });
@@ -620,7 +492,8 @@ const getDeadlineEntries = (
     purchase.warrantyDeadline
   ) {
     entries.push({
-      kind: 'Warranty',
+      kind:
+        'Warranty',
       date:
         purchase.warrantyDeadline,
     });
@@ -630,7 +503,8 @@ const getDeadlineEntries = (
     purchase.renewalDeadline
   ) {
     entries.push({
-      kind: 'Renewal',
+      kind:
+        'Renewal',
       date:
         purchase.renewalDeadline,
     });
@@ -642,14 +516,16 @@ const getDeadlineEntries = (
 const getNextDeadline = (
   purchase:
     Pick<
-      StoredProtectedPurchase,
+      ProtectedPurchaseRecordDto,
       | 'returnDeadline'
       | 'warrantyDeadline'
       | 'renewalDeadline'
       | 'lifecycleStatus'
     >,
 ): DeadlineEntry | null =>
-  getDeadlineEntries(purchase)
+  getDeadlineEntries(
+    purchase,
+  )
     .filter(
       (entry) =>
         daysUntil(
@@ -657,15 +533,20 @@ const getNextDeadline = (
         ) >= 0,
     )
     .sort(
-      (left, right) =>
+      (
+        left,
+        right,
+      ) =>
         left.date.localeCompare(
           right.date,
         ),
-    )[0] ?? null;
+    )[0] ??
+  null;
 
 const formatNextDeadline = (
   entry: DeadlineEntry | null,
-  lifecycleStatus: PurchaseLifecycleStatus,
+  lifecycleStatus:
+    PurchaseLifecycleStatus,
 ): string => {
   if (
     lifecycleStatus ===
@@ -686,7 +567,9 @@ const formatNextDeadline = (
   }
 
   const remaining =
-    daysUntil(entry.date);
+    daysUntil(
+      entry.date,
+    );
 
   const relative =
     remaining === 0
@@ -703,123 +586,150 @@ const formatNextDeadline = (
 const timelineStateForDate = (
   date: string,
 ): ProtectionTimelineItem['state'] =>
-  daysUntil(date) < 0
+  daysUntil(
+    date,
+  ) < 0
     ? 'expired'
     : 'upcoming';
 
 const buildTimeline = (
-  stored: StoredProtectedPurchase,
+  record:
+    ProtectedPurchaseRecordDto,
 ): ProtectionTimelineItem[] => {
-  const items: ProtectionTimelineItem[] = [
-    {
-      id: 'purchase',
-      label: 'Purchased',
-      detail:
-        'Purchase date saved in Backstop.',
-      dateLabel:
-        formatDateOnly(
-          stored.purchaseDate,
-        ),
-      state: 'complete',
-    },
-  ];
+  const items:
+    ProtectionTimelineItem[] =
+      [
+        {
+          id:
+            'purchase',
+          label:
+            'Purchased',
+          detail:
+            'Purchase date saved in Backstop.',
+          dateLabel:
+            formatDateOnly(
+              record.purchaseDate,
+            ),
+          state:
+            'complete',
+        },
+      ];
 
-  if (stored.deliveryDate) {
+  if (
+    record.deliveryDate
+  ) {
     items.push({
-      id: 'delivery',
-      label: 'Delivered',
+      id:
+        'delivery',
+      label:
+        'Delivered',
       detail:
         'Delivery date used as the return-window basis.',
       dateLabel:
         formatDateOnly(
-          stored.deliveryDate,
+          record.deliveryDate,
         ),
-      state: 'complete',
+      state:
+        'complete',
     });
   }
 
-  if (stored.returnDeadline) {
+  if (
+    record.returnDeadline
+  ) {
     items.push({
-      id: 'return',
-      label: 'Return deadline',
+      id:
+        'return',
+      label:
+        'Return deadline',
       detail:
-        stored.lifecycleStatus ===
+        record.lifecycleStatus ===
         'kept'
           ? 'Return tracking was closed when this purchase was marked as kept.'
           : 'Calculated from the detected return window and the saved purchase details.',
       dateLabel:
         formatDateOnly(
-          stored.returnDeadline,
+          record.returnDeadline,
         ),
       state:
-        stored.lifecycleStatus ===
+        record.lifecycleStatus ===
         'kept'
           ? 'neutral'
           : timelineStateForDate(
-              stored.returnDeadline,
+              record.returnDeadline,
             ),
     });
   }
 
-  if (stored.warrantyDeadline) {
+  if (
+    record.warrantyDeadline
+  ) {
     items.push({
-      id: 'warranty',
-      label: 'Warranty expiry',
+      id:
+        'warranty',
+      label:
+        'Warranty expiry',
       detail:
         'Calculated from the detected warranty duration.',
       dateLabel:
         formatDateOnly(
-          stored.warrantyDeadline,
+          record.warrantyDeadline,
         ),
       state:
         timelineStateForDate(
-          stored.warrantyDeadline,
-        ),
-    });
-  }
-
-  if (stored.renewalDeadline) {
-    items.push({
-      id: 'renewal',
-      label: 'Renewal date',
-      detail:
-        'Calculated from the detected renewal interval.',
-      dateLabel:
-        formatDateOnly(
-          stored.renewalDeadline,
-        ),
-      state:
-        timelineStateForDate(
-          stored.renewalDeadline,
+          record.warrantyDeadline,
         ),
     });
   }
 
   if (
-    stored.lifecycleStatus !==
+    record.renewalDeadline
+  ) {
+    items.push({
+      id:
+        'renewal',
+      label:
+        'Renewal date',
+      detail:
+        'Calculated from the detected renewal interval.',
+      dateLabel:
+        formatDateOnly(
+          record.renewalDeadline,
+        ),
+      state:
+        timelineStateForDate(
+          record.renewalDeadline,
+        ),
+    });
+  }
+
+  if (
+    record.lifecycleStatus !==
       'active'
   ) {
     items.push({
-      id: 'lifecycle',
+      id:
+        'lifecycle',
       label:
         lifecycleLabels[
-          stored.lifecycleStatus
+          record.lifecycleStatus
         ],
       detail:
-        stored.lifecycleStatus ===
+        record.lifecycleStatus ===
         'kept'
           ? 'You marked this purchase as kept.'
-          : stored.lifecycleStatus ===
+          : record.lifecycleStatus ===
               'returned'
             ? 'You marked this purchase as returned.'
             : 'You marked this purchase as refunded.',
       dateLabel:
-        stored.lifecycleUpdatedAtIso
+        record.lifecycleUpdatedAtIso
           ? formatIsoDate(
-              stored.lifecycleUpdatedAtIso,
+              record.lifecycleUpdatedAtIso,
             )
           : null,
-      state: 'complete',
+      state:
+        'complete',
     });
   }
 
@@ -827,10 +737,13 @@ const buildTimeline = (
 };
 
 const hydrate = (
-  stored: StoredProtectedPurchase,
+  record:
+    ProtectedPurchaseRecordDto,
 ): ProtectedPurchase => {
   const nextDeadline =
-    getNextDeadline(stored);
+    getNextDeadline(
+      record,
+    );
 
   const remaining =
     nextDeadline
@@ -841,73 +754,73 @@ const hydrate = (
 
   return {
     id:
-      stored.id,
+      record.id,
     sourceScanId:
-      stored.sourceScanId,
+      record.sourceScanId,
     merchant:
-      stored.merchant,
+      record.merchant,
     domain:
-      stored.domain,
+      record.domain,
     product:
-      stored.product,
+      record.product,
     amount:
-      stored.amount,
+      record.amount,
     currency:
-      stored.currency,
+      record.currency,
     amountLabel:
-      stored.amountLabel,
+      record.amountLabel,
     purchaseDate:
-      stored.purchaseDate,
+      record.purchaseDate,
     deliveryDate:
-      stored.deliveryDate,
+      record.deliveryDate,
     purchaseDateLabel:
       formatDateOnly(
-        stored.purchaseDate,
+        record.purchaseDate,
       ),
     deliveryDateLabel:
-      stored.deliveryDate
+      record.deliveryDate
         ? formatDateOnly(
-            stored.deliveryDate,
+            record.deliveryDate,
           )
         : null,
     returnDeadline:
-      stored.returnDeadline,
+      record.returnDeadline,
     warrantyDeadline:
-      stored.warrantyDeadline,
+      record.warrantyDeadline,
     renewalDeadline:
-      stored.renewalDeadline,
+      record.renewalDeadline,
     nextDeadlineIso:
       nextDeadline?.date ??
       null,
     nextDeadlineLabel:
       formatNextDeadline(
         nextDeadline,
-        stored.lifecycleStatus,
+        record.lifecycleStatus,
       ),
     deadlineCount:
       getDeadlineEntries(
-        stored,
+        record,
       ).length,
     lifecycleStatus:
-      stored.lifecycleStatus,
+      record.lifecycleStatus,
     lifecycleLabel:
       lifecycleLabels[
-        stored.lifecycleStatus
+        record.lifecycleStatus
       ],
     lifecycleUpdatedLabel:
-      stored.lifecycleUpdatedAtIso
+      record.lifecycleUpdatedAtIso
         ? formatIsoDate(
-            stored.lifecycleUpdatedAtIso,
+            record.lifecycleUpdatedAtIso,
           )
         : null,
     evidenceSnapshot:
-      stored.evidenceSnapshot,
+      record.evidenceSnapshot,
     timeline:
       buildTimeline(
-        stored,
+        record,
       ),
     status:
-      stored.lifecycleStatus ===
+      record.lifecycleStatus ===
         'active' &&
       remaining !== null &&
       remaining <= 7
@@ -916,278 +829,15 @@ const hydrate = (
   };
 };
 
-const readStored = (): StoredProtectedPurchase[] => {
-  try {
-    const raw =
-      window.localStorage.getItem(
-        STORAGE_KEY,
-      );
-
-    if (!raw) {
-      return [];
-    }
-
-    const parsed =
-      JSON.parse(raw) as unknown;
-
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    return parsed.flatMap(
-      (value) => {
-        const normalized =
-          normalizeStoredPurchase(
-            value,
-          );
-
-        return normalized
-          ? [normalized]
-          : [];
-      },
-    );
-  } catch {
-    return [];
-  }
-};
-
-const writeStored = (
-  purchases:
-    StoredProtectedPurchase[],
-): void => {
-  try {
-    window.localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify(
-        purchases,
-      ),
-    );
-  } catch {
-    throw new Error(
-      'Backstop could not save protection data on this device.',
-    );
-  }
-};
-
-const validateProtectionInput = (
-  input: ProtectionInput,
-): void => {
-  if (!isDateOnly(input.purchaseDate)) {
-    throw new Error(
-      'Enter a valid purchase date.',
-    );
-  }
-
-  if (
-    input.deliveryDate &&
-    !isDateOnly(
-      input.deliveryDate,
-    )
-  ) {
-    throw new Error(
-      'Enter a valid delivery date.',
-    );
-  }
-
-  if (
-    input.deliveryDate &&
-    input.deliveryDate <
-      input.purchaseDate
-  ) {
-    throw new Error(
-      'Delivery date cannot be earlier than the purchase date.',
-    );
-  }
-};
-
-const buildDeadlinesFromTerms = (
-  terms: StoredProtectionTerms,
-  input: ProtectionInput,
-): Pick<
-  StoredProtectedPurchase,
-  | 'returnDeadline'
-  | 'warrantyDeadline'
-  | 'renewalDeadline'
-> => {
-  validateProtectionInput(
-    input,
-  );
-
-  const returnBasis =
-    input.deliveryDate ??
-    input.purchaseDate;
-
-  return {
-    returnDeadline:
-      terms.returnWindowDays !==
-      null
-        ? addDays(
-            returnBasis,
-            terms.returnWindowDays,
-          )
-        : null,
-
-    warrantyDeadline:
-      terms.warrantyMonths !==
-      null
-        ? addMonths(
-            input.purchaseDate,
-            terms.warrantyMonths,
-          )
-        : null,
-
-    renewalDeadline:
-      terms.renewalInterval
-        ? addRenewalInterval(
-            input.purchaseDate,
-            terms.renewalInterval,
-          )
-        : null,
-  };
-};
-
-const termsFromScan = (
-  scan: PurchaseScan,
-): StoredProtectionTerms => ({
-  returnWindowDays:
-    scan.protection
-      .returnWindowDays,
-  warrantyMonths:
-    scan.protection
-      .warrantyMonths,
-  renewalAmount:
-    scan.protection
-      .renewalAmount,
-  renewalInterval:
-    scan.protection
-      .renewalInterval,
-});
-
-const snapshotFromScan = (
-  scan: PurchaseScan,
-): ProtectionEvidenceSnapshot => ({
-  risk:
-    scan.risk,
-  verdict:
-    scan.verdict,
-  evidenceCoverage:
-    scan.evidenceCoverage,
-  scannedAtLabel:
-    scan.scannedAtLabel,
-  findings:
-    scan.findings.map(
-      (finding) => ({
-        ...finding,
-      }),
-    ),
-});
-
-export const calculateProtectionPreview = (
-  scan: PurchaseScan,
-  input: ProtectionInput,
-) => {
-  const deadlines =
-    buildDeadlinesFromTerms(
-      termsFromScan(
-        scan,
-      ),
-      input,
-    );
-
-  return {
-    returnDeadlineLabel:
-      deadlines.returnDeadline
-        ? formatDateOnly(
-            deadlines.returnDeadline,
-          )
-        : 'Not calculated',
-
-    warrantyDeadlineLabel:
-      deadlines.warrantyDeadline
-        ? formatDateOnly(
-            deadlines.warrantyDeadline,
-          )
-        : 'Not calculated',
-
-    renewalDeadlineLabel:
-      deadlines.renewalDeadline
-        ? formatDateOnly(
-            deadlines.renewalDeadline,
-          )
-        : 'Not calculated',
-
-    returnBasisLabel:
-      input.deliveryDate
-        ? 'Delivery date'
-        : 'Purchase date',
-  };
-};
-
-const formatMonitoredValue = (
-  purchases:
-    ProtectedPurchase[],
-): string => {
-  const withValues =
-    purchases.filter(
-      (
-        purchase,
-      ): purchase is ProtectedPurchase & {
-        amount: number;
-        currency: string;
-      } =>
-        purchase.amount !== null &&
-        purchase.currency !== null,
-    );
-
-  if (
-    withValues.length ===
-    0
-  ) {
-    return '—';
-  }
-
-  const currencies =
-    new Set(
-      withValues.map(
-        (purchase) =>
-          purchase.currency,
-      ),
-    );
-
-  if (
-    currencies.size !==
-    1
-  ) {
-    return 'Mixed';
-  }
-
-  const currency =
-    withValues[0].currency;
-
-  const total =
-    withValues.reduce(
-      (sum, purchase) =>
-        sum +
-        purchase.amount,
-      0,
-    );
-
-  return new Intl.NumberFormat(
-    'en-MT',
-    {
-      style: 'currency',
-      currency,
-      maximumFractionDigits: 2,
-    },
-  ).format(total);
-};
-
 const sortHydrated = (
   purchases:
     ProtectedPurchase[],
 ): ProtectedPurchase[] =>
   purchases.sort(
-    (left, right) => {
+    (
+      left,
+      right,
+    ) => {
       if (
         left.nextDeadlineIso &&
         right.nextDeadlineIso
@@ -1215,32 +865,248 @@ const sortHydrated = (
     },
   );
 
+const buildPreviewDeadlines = (
+  terms:
+    ProtectionTermsDto,
+  input:
+    ProtectionInput,
+) => {
+  if (
+    !isDateOnly(
+      input.purchaseDate,
+    )
+  ) {
+    throw new Error(
+      'Enter a valid purchase date.',
+    );
+  }
+
+  if (
+    input.deliveryDate &&
+    !isDateOnly(
+      input.deliveryDate,
+    )
+  ) {
+    throw new Error(
+      'Enter a valid delivery date.',
+    );
+  }
+
+  if (
+    input.deliveryDate &&
+    input.deliveryDate <
+      input.purchaseDate
+  ) {
+    throw new Error(
+      'Delivery date cannot be earlier than the purchase date.',
+    );
+  }
+
+  const returnBasis =
+    input.deliveryDate ??
+    input.purchaseDate;
+
+  return {
+    returnDeadline:
+      terms.returnWindowDays !==
+      null
+        ? addDays(
+            returnBasis,
+            terms.returnWindowDays,
+          )
+        : null,
+    warrantyDeadline:
+      terms.warrantyMonths !==
+      null
+        ? addMonths(
+            input.purchaseDate,
+            terms.warrantyMonths,
+          )
+        : null,
+    renewalDeadline:
+      terms.renewalInterval
+        ? addRenewalInterval(
+            input.purchaseDate,
+            terms.renewalInterval,
+          )
+        : null,
+  };
+};
+
+const termsFromScan = (
+  scan:
+    PurchaseScan,
+): ProtectionTermsDto => ({
+  returnWindowDays:
+    scan.protection
+      .returnWindowDays,
+  warrantyMonths:
+    scan.protection
+      .warrantyMonths,
+  renewalAmount:
+    scan.protection
+      .renewalAmount,
+  renewalInterval:
+    scan.protection
+      .renewalInterval,
+});
+
+const snapshotFromScan = (
+  scan:
+    PurchaseScan,
+): ProtectionEvidenceSnapshot => ({
+  risk:
+    scan.risk,
+  verdict:
+    scan.verdict,
+  evidenceCoverage:
+    scan.evidenceCoverage,
+  scannedAtLabel:
+    scan.scannedAtLabel,
+  findings:
+    scan.findings.map(
+      (finding) => ({
+        ...finding,
+      }),
+    ),
+});
+
+export const calculateProtectionPreview = (
+  scan: PurchaseScan,
+  input: ProtectionInput,
+) => {
+  const deadlines =
+    buildPreviewDeadlines(
+      termsFromScan(
+        scan,
+      ),
+      input,
+    );
+
+  return {
+    returnDeadlineLabel:
+      deadlines.returnDeadline
+        ? formatDateOnly(
+            deadlines.returnDeadline,
+          )
+        : 'Not calculated',
+    warrantyDeadlineLabel:
+      deadlines.warrantyDeadline
+        ? formatDateOnly(
+            deadlines.warrantyDeadline,
+          )
+        : 'Not calculated',
+    renewalDeadlineLabel:
+      deadlines.renewalDeadline
+        ? formatDateOnly(
+            deadlines.renewalDeadline,
+          )
+        : 'Not calculated',
+    returnBasisLabel:
+      input.deliveryDate
+        ? 'Delivery date'
+        : 'Purchase date',
+  };
+};
+
+const formatMonitoredValue = (
+  purchases:
+    ProtectedPurchase[],
+): string => {
+  const withValues =
+    purchases.filter(
+      (
+        purchase,
+      ): purchase is ProtectedPurchase & {
+        amount: number;
+        currency: string;
+      } =>
+        purchase.amount !==
+          null &&
+        purchase.currency !==
+          null,
+    );
+
+  if (
+    withValues.length ===
+    0
+  ) {
+    return '—';
+  }
+
+  const currencies =
+    new Set(
+      withValues.map(
+        (purchase) =>
+          purchase.currency,
+      ),
+    );
+
+  if (
+    currencies.size !==
+    1
+  ) {
+    return 'Mixed';
+  }
+
+  const currency =
+    withValues[0]
+      .currency;
+
+  const total =
+    withValues.reduce(
+      (
+        sum,
+        purchase,
+      ) =>
+        sum +
+        purchase.amount,
+      0,
+    );
+
+  return new Intl.NumberFormat(
+    'en-MT',
+    {
+      style:
+        'currency',
+      currency,
+      maximumFractionDigits:
+        2,
+    },
+  ).format(total);
+};
+
 export const getDashboardMetrics = (
   purchases:
     ProtectedPurchase[],
 ): DashboardMetric[] => [
   {
-    id: 'protected',
+    id:
+      'protected',
     label:
       'Purchases protected',
     value:
       String(
         purchases.length,
       ),
-    icon: 'shield',
+    icon:
+      'shield',
   },
   {
-    id: 'value',
+    id:
+      'value',
     label:
       'Value monitored',
     value:
       formatMonitoredValue(
         purchases,
       ),
-    icon: 'value',
+    icon:
+      'value',
   },
   {
-    id: 'deadlines',
+    id:
+      'deadlines',
     label:
       'Deadlines tracked',
     value:
@@ -1255,10 +1121,12 @@ export const getDashboardMetrics = (
           0,
         ),
       ),
-    icon: 'deadline',
+    icon:
+      'deadline',
   },
   {
-    id: 'attention',
+    id:
+      'attention',
     label:
       'Needs attention',
     value:
@@ -1269,221 +1137,574 @@ export const getDashboardMetrics = (
             'attention',
         ).length,
       ),
-    icon: 'attention',
+    icon:
+      'attention',
   },
 ];
 
+const inferReturnWindowDays = (
+  value:
+    LegacyProtectedPurchaseV1,
+): number | null => {
+  if (
+    !value.returnDeadline
+  ) {
+    return null;
+  }
+
+  const basis =
+    value.deliveryDate ??
+    value.purchaseDate;
+
+  const days =
+    Math.round(
+      (
+        dateOnlyToUtcMs(
+          value.returnDeadline,
+        ) -
+        dateOnlyToUtcMs(
+          basis,
+        )
+      ) /
+        (
+          24 *
+          60 *
+          60 *
+          1000
+        ),
+    );
+
+  return days > 0 &&
+    days <= 180
+    ? days
+    : null;
+};
+
+const inferWarrantyMonths = (
+  value:
+    LegacyProtectedPurchaseV1,
+): number | null => {
+  if (
+    !value.warrantyDeadline
+  ) {
+    return null;
+  }
+
+  for (
+    let months = 1;
+    months <= 120;
+    months += 1
+  ) {
+    if (
+      addMonths(
+        value.purchaseDate,
+        months,
+      ) ===
+      value.warrantyDeadline
+    ) {
+      return months;
+    }
+  }
+
+  return null;
+};
+
+const inferRenewalInterval = (
+  value:
+    LegacyProtectedPurchaseV1,
+): string | null => {
+  if (
+    !value.renewalDeadline
+  ) {
+    return null;
+  }
+
+  const candidates = [
+    'day',
+    'week',
+    'month',
+    'year',
+  ];
+
+  return (
+    candidates.find(
+      (candidate) =>
+        addRenewalInterval(
+          value.purchaseDate,
+          candidate,
+        ) ===
+        value.renewalDeadline,
+    ) ??
+    null
+  );
+};
+
+const parseLegacyV1 = (
+  value: unknown,
+): LegacyProtectedPurchaseV1 | null => {
+  if (
+    typeof value !==
+      'object' ||
+    value === null ||
+    Array.isArray(
+      value,
+    )
+  ) {
+    return null;
+  }
+
+  const record =
+    value as Record<string, unknown>;
+
+  if (
+    record.version !== 1 ||
+    typeof record.id !==
+      'string' ||
+    typeof record.sourceScanId !==
+      'string' ||
+    typeof record.merchant !==
+      'string' ||
+    typeof record.domain !==
+      'string' ||
+    typeof record.product !==
+      'string' ||
+    !isNullableNumber(
+      record.amount,
+    ) ||
+    !isNullableString(
+      record.currency,
+    ) ||
+    typeof record.amountLabel !==
+      'string' ||
+    !isDateOnly(
+      record.purchaseDate,
+    ) ||
+    !isNullableDateOnly(
+      record.deliveryDate,
+    ) ||
+    !isNullableDateOnly(
+      record.returnDeadline,
+    ) ||
+    !isNullableDateOnly(
+      record.warrantyDeadline,
+    ) ||
+    !isNullableDateOnly(
+      record.renewalDeadline,
+    ) ||
+    typeof record.createdAtIso !==
+      'string'
+  ) {
+    return null;
+  }
+
+  return record as unknown as LegacyProtectedPurchaseV1;
+};
+
+const parseLegacyV2 = (
+  value: unknown,
+): LegacyProtectedPurchaseV2 | null => {
+  if (
+    typeof value !==
+      'object' ||
+    value === null ||
+    Array.isArray(
+      value,
+    )
+  ) {
+    return null;
+  }
+
+  const record =
+    value as Record<string, unknown>;
+
+  if (
+    record.version !== 2 ||
+    typeof record.id !==
+      'string' ||
+    typeof record.sourceScanId !==
+      'string' ||
+    typeof record.merchant !==
+      'string' ||
+    typeof record.domain !==
+      'string' ||
+    typeof record.product !==
+      'string' ||
+    !isNullableNumber(
+      record.amount,
+    ) ||
+    !isNullableString(
+      record.currency,
+    ) ||
+    typeof record.amountLabel !==
+      'string' ||
+    !isDateOnly(
+      record.purchaseDate,
+    ) ||
+    !isNullableDateOnly(
+      record.deliveryDate,
+    ) ||
+    !isNullableDateOnly(
+      record.returnDeadline,
+    ) ||
+    !isNullableDateOnly(
+      record.warrantyDeadline,
+    ) ||
+    !isNullableDateOnly(
+      record.renewalDeadline,
+    ) ||
+    typeof record.protectionTerms !==
+      'object' ||
+    record.protectionTerms ===
+      null ||
+    !isLifecycleStatus(
+      record.lifecycleStatus,
+    ) ||
+    !isNullableString(
+      record.lifecycleUpdatedAtIso,
+    ) ||
+    typeof record.createdAtIso !==
+      'string'
+  ) {
+    return null;
+  }
+
+  return record as unknown as LegacyProtectedPurchaseV2;
+};
+
+const normalizeLegacyRecord = (
+  value: unknown,
+): ProtectedPurchaseRecordDto | null => {
+  const v2 =
+    parseLegacyV2(
+      value,
+    );
+
+  if (v2) {
+    return {
+      id:
+        v2.id,
+      sourceScanId:
+        v2.sourceScanId,
+      merchant:
+        v2.merchant,
+      domain:
+        v2.domain,
+      product:
+        v2.product,
+      amount:
+        v2.amount,
+      currency:
+        v2.currency,
+      amountLabel:
+        v2.amountLabel,
+      purchaseDate:
+        v2.purchaseDate,
+      deliveryDate:
+        v2.deliveryDate,
+      returnDeadline:
+        v2.returnDeadline,
+      warrantyDeadline:
+        v2.warrantyDeadline,
+      renewalDeadline:
+        v2.renewalDeadline,
+      protectionTerms:
+        v2.protectionTerms,
+      lifecycleStatus:
+        v2.lifecycleStatus,
+      lifecycleUpdatedAtIso:
+        v2.lifecycleUpdatedAtIso,
+      evidenceSnapshot:
+        v2.evidenceSnapshot,
+      createdAtIso:
+        v2.createdAtIso,
+    };
+  }
+
+  const v1 =
+    parseLegacyV1(
+      value,
+    );
+
+  if (!v1) {
+    return null;
+  }
+
+  return {
+    id:
+      v1.id,
+    sourceScanId:
+      v1.sourceScanId,
+    merchant:
+      v1.merchant,
+    domain:
+      v1.domain,
+    product:
+      v1.product,
+    amount:
+      v1.amount,
+    currency:
+      v1.currency,
+    amountLabel:
+      v1.amountLabel,
+    purchaseDate:
+      v1.purchaseDate,
+    deliveryDate:
+      v1.deliveryDate,
+    returnDeadline:
+      v1.returnDeadline,
+    warrantyDeadline:
+      v1.warrantyDeadline,
+    renewalDeadline:
+      v1.renewalDeadline,
+    protectionTerms: {
+      returnWindowDays:
+        inferReturnWindowDays(
+          v1,
+        ),
+      warrantyMonths:
+        inferWarrantyMonths(
+          v1,
+        ),
+      renewalAmount:
+        null,
+      renewalInterval:
+        inferRenewalInterval(
+          v1,
+        ),
+    },
+    lifecycleStatus:
+      'active',
+    lifecycleUpdatedAtIso:
+      null,
+    evidenceSnapshot:
+      null,
+    createdAtIso:
+      v1.createdAtIso,
+  };
+};
+
+const migrateLegacyStorage = async (): Promise<void> => {
+  if (
+    window.localStorage.getItem(
+      MIGRATION_KEY,
+    ) === 'done'
+  ) {
+    return;
+  }
+
+  const raw =
+    window.localStorage.getItem(
+      LEGACY_STORAGE_KEY,
+    );
+
+  if (!raw) {
+    window.localStorage.setItem(
+      MIGRATION_KEY,
+      'done',
+    );
+
+    return;
+  }
+
+  let parsed: unknown;
+
+  try {
+    parsed =
+      JSON.parse(
+        raw,
+      ) as unknown;
+  } catch {
+    return;
+  }
+
+  if (
+    !Array.isArray(
+      parsed,
+    )
+  ) {
+    return;
+  }
+
+  const records =
+    parsed.flatMap(
+      (value) => {
+        const normalized =
+          normalizeLegacyRecord(
+            value,
+          );
+
+        return normalized
+          ? [normalized]
+          : [];
+      },
+    );
+
+  if (
+    records.length > 0
+  ) {
+    await requestJson<void>(
+      '/api/protection/import',
+      {
+        method:
+          'POST',
+        body:
+          JSON.stringify({
+            records,
+          }),
+      },
+    );
+  }
+
+  window.localStorage.removeItem(
+    LEGACY_STORAGE_KEY,
+  );
+
+  window.localStorage.setItem(
+    MIGRATION_KEY,
+    'done',
+  );
+};
+
+const createRequest = (
+  scan:
+    PurchaseScan,
+  input:
+    ProtectionInput,
+): CreateProtectedPurchaseRequestDto => ({
+  sourceScanId:
+    scan.id,
+  merchant:
+    scan.merchant,
+  domain:
+    scan.domain,
+  product:
+    scan.product,
+  amount:
+    scan.amount,
+  currency:
+    scan.currency,
+  amountLabel:
+    scan.amountLabel,
+  purchaseDate:
+    input.purchaseDate,
+  deliveryDate:
+    input.deliveryDate,
+  protectionTerms:
+    termsFromScan(
+      scan,
+    ),
+  evidenceSnapshot:
+    snapshotFromScan(
+      scan,
+    ),
+});
+
 export const protectionService = {
-  list(): ProtectedPurchase[] {
+  async list(): Promise<
+    ProtectedPurchase[]
+  > {
+    await migrateLegacyStorage();
+
+    const response =
+      await requestJson<{
+        records:
+          ProtectedPurchaseRecordDto[];
+      }>(
+        '/api/protection',
+      );
+
     return sortHydrated(
-      readStored().map(
+      response.records.map(
         hydrate,
       ),
     );
   },
 
-  get(
-    id: string,
-  ): ProtectedPurchase | null {
-    const stored =
-      readStored().find(
-        (purchase) =>
-          purchase.id === id,
-      );
-
-    return stored
-      ? hydrate(stored)
-      : null;
-  },
-
-  protect(
+  async protect(
     scan: PurchaseScan,
     input: ProtectionInput,
-  ): ProtectedPurchase {
-    const terms =
-      termsFromScan(
-        scan,
+  ): Promise<ProtectedPurchase> {
+    const record =
+      await requestJson<ProtectedPurchaseRecordDto>(
+        '/api/protection',
+        {
+          method:
+            'POST',
+          body:
+            JSON.stringify(
+              createRequest(
+                scan,
+                input,
+              ),
+            ),
+        },
       );
 
-    const deadlines =
-      buildDeadlinesFromTerms(
-        terms,
-        input,
-      );
-
-    const stored =
-      readStored();
-
-    const existing =
-      stored.find(
-        (purchase) =>
-          purchase.sourceScanId ===
-          scan.id,
-      );
-
-    const record: StoredProtectedPurchase = {
-      version: 2,
-      id:
-        existing?.id ??
-        crypto.randomUUID(),
-      sourceScanId:
-        scan.id,
-      merchant:
-        scan.merchant,
-      domain:
-        scan.domain,
-      product:
-        scan.product,
-      amount:
-        scan.amount,
-      currency:
-        scan.currency,
-      amountLabel:
-        scan.amountLabel,
-      purchaseDate:
-        input.purchaseDate,
-      deliveryDate:
-        input.deliveryDate,
-      ...deadlines,
-      protectionTerms:
-        terms,
-      lifecycleStatus:
-        existing?.lifecycleStatus ??
-        'active',
-      lifecycleUpdatedAtIso:
-        existing?.lifecycleUpdatedAtIso ??
-        null,
-      evidenceSnapshot:
-        snapshotFromScan(
-          scan,
-        ),
-      createdAtIso:
-        existing?.createdAtIso ??
-        new Date().toISOString(),
-    };
-
-    const next =
-      existing
-        ? stored.map(
-            (purchase) =>
-              purchase.id ===
-              existing.id
-                ? record
-                : purchase,
-          )
-        : [
-            record,
-            ...stored,
-          ];
-
-    writeStored(next);
-
-    return hydrate(record);
+    return hydrate(
+      record,
+    );
   },
 
-  updateDates(
+  async updateDates(
     id: string,
     input: ProtectionInput,
-  ): ProtectedPurchase {
-    const stored =
-      readStored();
-
-    const current =
-      stored.find(
-        (purchase) =>
-          purchase.id === id,
+  ): Promise<ProtectedPurchase> {
+    const record =
+      await requestJson<ProtectedPurchaseRecordDto>(
+        `/api/protection/${encodeURIComponent(
+          id,
+        )}/dates`,
+        {
+          method:
+            'PATCH',
+          body:
+            JSON.stringify(
+              input,
+            ),
+        },
       );
 
-    if (!current) {
-      throw new Error(
-        'Protected purchase could not be found.',
-      );
-    }
-
-    const deadlines =
-      buildDeadlinesFromTerms(
-        current.protectionTerms,
-        input,
-      );
-
-    const updated: StoredProtectedPurchase = {
-      ...current,
-      purchaseDate:
-        input.purchaseDate,
-      deliveryDate:
-        input.deliveryDate,
-      ...deadlines,
-    };
-
-    writeStored(
-      stored.map(
-        (purchase) =>
-          purchase.id === id
-            ? updated
-            : purchase,
-      ),
+    return hydrate(
+      record,
     );
-
-    return hydrate(updated);
   },
 
-  setLifecycle(
+  async setLifecycle(
     id: string,
     lifecycleStatus:
       PurchaseLifecycleStatus,
-  ): ProtectedPurchase {
-    const stored =
-      readStored();
-
-    const current =
-      stored.find(
-        (purchase) =>
-          purchase.id === id,
+  ): Promise<ProtectedPurchase> {
+    const record =
+      await requestJson<ProtectedPurchaseRecordDto>(
+        `/api/protection/${encodeURIComponent(
+          id,
+        )}/lifecycle`,
+        {
+          method:
+            'PATCH',
+          body:
+            JSON.stringify({
+              lifecycleStatus,
+            }),
+        },
       );
 
-    if (!current) {
-      throw new Error(
-        'Protected purchase could not be found.',
-      );
-    }
-
-    const updated: StoredProtectedPurchase = {
-      ...current,
-      lifecycleStatus,
-      lifecycleUpdatedAtIso:
-        lifecycleStatus ===
-        'active'
-          ? null
-          : new Date().toISOString(),
-    };
-
-    writeStored(
-      stored.map(
-        (purchase) =>
-          purchase.id === id
-            ? updated
-            : purchase,
-      ),
+    return hydrate(
+      record,
     );
-
-    return hydrate(updated);
   },
 
-  remove(
+  async remove(
     id: string,
-  ): ProtectedPurchase[] {
-    const next =
-      readStored().filter(
-        (purchase) =>
-          purchase.id !== id,
-      );
-
-    writeStored(next);
-
-    return sortHydrated(
-      next.map(
-        hydrate,
-      ),
+  ): Promise<void> {
+    await requestJson<void>(
+      `/api/protection/${encodeURIComponent(
+        id,
+      )}`,
+      {
+        method:
+          'DELETE',
+      },
     );
   },
 };
