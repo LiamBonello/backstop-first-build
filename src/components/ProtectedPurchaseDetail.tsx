@@ -907,7 +907,7 @@ export function ProtectedPurchaseDetail({
                   'text.secondary',
               }}
             >
-              Removes the local protection record and its saved evidence from this device.
+              Removes the protection record and its saved evidence from your local PostgreSQL database.
             </Typography>
           </Box>
 
@@ -1067,7 +1067,7 @@ export function ProtectedPurchaseDetail({
                 1.65,
             }}
           >
-            This removes the saved purchase, calculated deadlines and evidence snapshot from this device.
+            This removes the saved purchase, calculated deadlines and evidence snapshot from your local PostgreSQL database.
           </Typography>
         </DialogContent>
 
