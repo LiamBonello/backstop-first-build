@@ -1,7 +1,7 @@
-import { ScannerError } from './scannerError';
-import { assertPublicHttpUrl } from './urlSafety';
+import { ScannerError } from "./scannerError";
+import { assertPublicHttpUrl } from "./urlSafety";
 
-const MAX_HTML_BYTES = 1_500_000;
+const DEFAULT_MAX_HTML_BYTES = 2_500_000;
 const MAX_REDIRECTS = 4;
 const REQUEST_TIMEOUT_MS = 9_000;
 
@@ -10,16 +10,21 @@ export interface FetchedHtml {
   finalUrl: URL;
 }
 
-async function readLimitedBody(response: Response): Promise<string> {
-  if (!response.body) return '';
+export interface FetchHtmlOptions {
+  maxBytes?: number;
+}
 
-  const contentLength = Number(
-    response.headers.get('content-length') ?? 0,
-  );
+async function readLimitedBody(
+  response: Response,
+  maxBytes: number,
+): Promise<string> {
+  if (!response.body) return "";
 
-  if (contentLength > MAX_HTML_BYTES) {
+  const contentLength = Number(response.headers.get("content-length") ?? 0);
+
+  if (contentLength > maxBytes) {
     throw new ScannerError(
-      'That page is too large for the current scanner.',
+      "That page is too large for the current scanner.",
       422,
     );
   }
@@ -28,7 +33,7 @@ async function readLimitedBody(response: Response): Promise<string> {
   const decoder = new TextDecoder();
 
   let received = 0;
-  let output = '';
+  let output = "";
 
   while (true) {
     const { done, value } = await reader.read();
@@ -37,11 +42,11 @@ async function readLimitedBody(response: Response): Promise<string> {
 
     received += value.byteLength;
 
-    if (received > MAX_HTML_BYTES) {
+    if (received > maxBytes) {
       await reader.cancel();
 
       throw new ScannerError(
-        'That page is too large for the current scanner.',
+        "That page is too large for the current scanner.",
         422,
       );
     }
@@ -58,7 +63,10 @@ async function readLimitedBody(response: Response): Promise<string> {
 
 export async function fetchHtml(
   input: string | URL,
+  options: FetchHtmlOptions = {},
 ): Promise<FetchedHtml> {
+  const maxBytes = options.maxBytes ?? DEFAULT_MAX_HTML_BYTES;
+
   let currentUrl = await assertPublicHttpUrl(input);
 
   for (
@@ -68,60 +76,42 @@ export async function fetchHtml(
   ) {
     const controller = new AbortController();
 
-    const timeout = setTimeout(
-      () => controller.abort(),
-      REQUEST_TIMEOUT_MS,
-    );
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
     let response: Response;
 
     try {
       response = await fetch(currentUrl, {
-        redirect: 'manual',
+        redirect: "manual",
         signal: controller.signal,
         headers: {
-          'user-agent':
-            'BackstopBot/0.2 (+https://backstop.local; purchase-intelligence prototype)',
-          accept:
-            'text/html,application/xhtml+xml;q=0.9,*/*;q=0.5',
-          'accept-language': 'en-GB,en;q=0.8',
+          "user-agent":
+            "BackstopBot/0.2 (+https://backstop.local; purchase-intelligence prototype)",
+          accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5",
+          "accept-language": "en-GB,en;q=0.8",
         },
       });
     } catch (error) {
-      if (
-        error instanceof Error &&
-        error.name === 'AbortError'
-      ) {
-        throw new ScannerError(
-          'The site took too long to respond.',
-          504,
-        );
+      if (error instanceof Error && error.name === "AbortError") {
+        throw new ScannerError("The site took too long to respond.", 504);
       }
 
-      throw new ScannerError(
-        'Backstop could not reach that page.',
-        422,
-      );
+      throw new ScannerError("Backstop could not reach that page.", 422);
     } finally {
       clearTimeout(timeout);
     }
 
-    if (
-      response.status >= 300 &&
-      response.status < 400
-    ) {
-      const location = response.headers.get('location');
+    if (response.status >= 300 && response.status < 400) {
+      const location = response.headers.get("location");
 
       if (!location) {
         throw new ScannerError(
-          'The site returned an incomplete redirect.',
+          "The site returned an incomplete redirect.",
           422,
         );
       }
 
-      currentUrl = await assertPublicHttpUrl(
-        new URL(location, currentUrl),
-      );
+      currentUrl = await assertPublicHttpUrl(new URL(location, currentUrl));
 
       continue;
     }
@@ -134,28 +124,23 @@ export async function fetchHtml(
     }
 
     const contentType =
-      response.headers
-        .get('content-type')
-        ?.toLowerCase() ?? '';
+      response.headers.get("content-type")?.toLowerCase() ?? "";
 
     if (
-      !contentType.includes('text/html') &&
-      !contentType.includes('application/xhtml+xml')
+      !contentType.includes("text/html") &&
+      !contentType.includes("application/xhtml+xml")
     ) {
       throw new ScannerError(
-        'That URL does not appear to be an HTML shopping page.',
+        "That URL does not appear to be an HTML shopping page.",
         422,
       );
     }
 
     return {
-      html: await readLimitedBody(response),
+      html: await readLimitedBody(response, maxBytes),
       finalUrl: currentUrl,
     };
   }
 
-  throw new ScannerError(
-    'The page redirected too many times.',
-    422,
-  );
+  throw new ScannerError("The page redirected too many times.", 422);
 }

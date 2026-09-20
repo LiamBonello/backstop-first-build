@@ -7,6 +7,8 @@ import type {
 } from "../src/types/purchase";
 import { fetchHtml } from "./fetchHtml";
 
+const MAIN_PAGE_MAX_BYTES = 10_000_000;
+
 interface PolicyCandidate {
   kind: "returns" | "terms" | "shipping" | "warranty" | "cancellation";
   label: string;
@@ -494,7 +496,9 @@ function createSignal(
 export async function analyzeUrl(
   inputUrl: string,
 ): Promise<RawScanResponseDto> {
-  const page = await fetchHtml(inputUrl);
+  const page = await fetchHtml(inputUrl, {
+    maxBytes: MAIN_PAGE_MAX_BYTES,
+  });
 
   const $ = cheerio.load(page.html);
 
