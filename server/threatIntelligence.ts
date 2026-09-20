@@ -47,11 +47,27 @@ export async function inspectThreatIntelligence(
     });
 
     if (!response.ok) {
+      let providerMessage: string | null = null;
+
+      try {
+        const errorPayload = asRecord((await response.json()) as unknown);
+        const errorRecord = errorPayload ? asRecord(errorPayload.error) : null;
+        const rawMessage = errorRecord?.message;
+
+        if (typeof rawMessage === "string") {
+          providerMessage = rawMessage.replace(/\s+/g, " ").trim().slice(0, 260);
+        }
+      } catch {
+        // Some Google errors do not include a JSON response body.
+      }
+
       return {
         provider: "GOOGLE_WEB_RISK",
         status: "UNAVAILABLE",
         threatTypes: [],
-        errorLabel: `Web Risk returned HTTP ${response.status}`,
+        errorLabel: providerMessage
+          ? `Web Risk HTTP ${response.status}: ${providerMessage}`
+          : `Web Risk returned HTTP ${response.status}`,
       };
     }
 
