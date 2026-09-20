@@ -20,7 +20,8 @@
     "express": "^5.2.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "tldts": "^7.4.13"
+    "tldts": "^7.4.13",
+    "playwright-chromium": "1.63.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
