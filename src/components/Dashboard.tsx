@@ -41,6 +41,11 @@ interface DashboardProps {
     (
       id: string,
     ) => void;
+
+  onOpenPurchase:
+    (
+      id: string,
+    ) => void;
 }
 
 export function Dashboard({
@@ -49,6 +54,7 @@ export function Dashboard({
   onBack,
   onScanNew,
   onRemovePurchase,
+  onOpenPurchase,
 }: DashboardProps) {
   const metricIcons: Record<
     DashboardMetric['icon'],
@@ -460,6 +466,33 @@ export function Dashboard({
                   purchase.id
                 }
 
+                role="button"
+
+                tabIndex={0}
+
+                onClick={() =>
+                  onOpenPurchase(
+                    purchase.id,
+                  )
+                }
+
+                onKeyDown={(
+                  event,
+                ) => {
+                  if (
+                    event.key ===
+                      'Enter' ||
+                    event.key ===
+                      ' '
+                  ) {
+                    event.preventDefault();
+
+                    onOpenPurchase(
+                      purchase.id,
+                    );
+                  }
+                }}
+
                 direction={{
                   xs:
                     'column',
@@ -502,8 +535,28 @@ export function Dashboard({
                         : 0.065,
                     )}`,
 
+                  cursor:
+                    'pointer',
+
+                  outline:
+                    'none',
+
                   transition:
-                    'transform .2s ease, border-color .2s ease',
+                    'transform .2s ease, border-color .2s ease, background-color .2s ease',
+
+                  '&:focus-visible': {
+                    borderColor:
+                      alpha(
+                        '#9D7BFF',
+                        0.35,
+                      ),
+
+                    boxShadow:
+                      `0 0 0 2px ${alpha(
+                        '#9D7BFF',
+                        0.13,
+                      )}`,
+                  },
 
                   '&:hover': {
                     transform:
