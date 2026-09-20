@@ -21,6 +21,69 @@ const LEGACY_STORAGE_KEY =
 const MIGRATION_KEY =
   'backstop.postgres-migration.v1';
 
+
+interface LegacyProtectedPurchaseV1 {
+  version: 1;
+  id: string;
+  sourceScanId: string;
+  merchant: string;
+  domain: string;
+  product: string;
+  amount: number | null;
+  currency: string | null;
+  amountLabel: string;
+  purchaseDate: string;
+  deliveryDate: string | null;
+  returnDeadline: string | null;
+  warrantyDeadline: string | null;
+  renewalDeadline: string | null;
+  createdAtIso: string;
+}
+
+interface LegacyProtectedPurchaseV2 {
+  version: 2;
+  id: string;
+  sourceScanId: string;
+  merchant: string;
+  domain: string;
+  product: string;
+  amount: number | null;
+  currency: string | null;
+  amountLabel: string;
+  purchaseDate: string;
+  deliveryDate: string | null;
+  returnDeadline: string | null;
+  warrantyDeadline: string | null;
+  renewalDeadline: string | null;
+  protectionTerms: ProtectionTermsDto;
+  lifecycleStatus: PurchaseLifecycleStatus;
+  lifecycleUpdatedAtIso: string | null;
+  evidenceSnapshot: ProtectionEvidenceSnapshot | null;
+  createdAtIso: string;
+}
+
+interface DeadlineEntry {
+  kind:
+    | 'Return'
+    | 'Warranty'
+    | 'Renewal';
+  date: string;
+}
+
+const lifecycleLabels: Record<
+  PurchaseLifecycleStatus,
+  string
+> = {
+  active:
+    'Active protection',
+  kept:
+    'Kept',
+  returned:
+    'Returned',
+  refunded:
+    'Refunded',
+};
+
 const isDateOnly = (
   value: unknown,
 ): value is string =>
