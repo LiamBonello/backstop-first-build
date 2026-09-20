@@ -388,9 +388,15 @@ export default function App() {
                 ),
             );
 
-            void notificationService.markRead(
-              reminder.id,
-            );
+            void notificationService
+              .markRead(
+                reminder.id,
+              )
+              .catch(
+                () => {
+                  // Read state can be retried from the in-app reminder center.
+                },
+              );
 
             desktopNotification.close();
           };
