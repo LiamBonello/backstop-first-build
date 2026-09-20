@@ -1,8 +1,7 @@
 import type { RawCompanyIntelligenceDto } from "../src/types/purchase";
 
 const REQUEST_TIMEOUT_MS = 6_000;
-const OPEN_CORPORATES_SEARCH_URL =
-  "https://api.opencorporates.com/v0.4/companies/search";
+const GLEIF_SEARCH_URL = "https://api.gleif.org/api/v1/lei-records";
 
 export interface CompanySourcePage {
   label: string;
@@ -88,6 +87,7 @@ const selectPublishedIdentity = (
   ];
 
   const merchantKey = normalizeCompanyName(input.merchantName);
+
   let best:
     | {
         name: string;
@@ -123,8 +123,7 @@ const selectPublishedIdentity = (
   }
 
   const identifierText =
-    best?.sourceText ??
-    orderedPages.map((page) => page.text).join(" ");
+    best?.sourceText ?? orderedPages.map((page) => page.text).join(" ");
 
   const companyNumber = findIdentifier(identifierText, [
     /(?:company|registration|registered)\s+(?:number|no\.?|#)\s*[:#-]?\s*([A-Z0-9-]{4,24})/i,
@@ -144,31 +143,54 @@ const selectPublishedIdentity = (
   };
 };
 
-const scoreRegistryMatch = (
-  published: PublishedIdentity,
-  company: Record<string, unknown>,
-): number => {
-  const name = typeof company.name === "string" ? company.name : "";
-  const number =
-    typeof company.company_number === "string" ? company.company_number : "";
+const getNestedRecord = (
+  value: unknown,
+  ...keys: string[]
+): Record<string, unknown> | null => {
+  let current = asRecord(value);
 
+  for (const key of keys) {
+    if (!current) {
+      return null;
+    }
+
+    current = asRecord(current[key]);
+  }
+
+  return current;
+};
+
+const readString = (
+  record: Record<string, unknown> | null,
+  key: string,
+): string | null => {
+  const value = record?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+};
+
+const scoreGleifMatch = (
+  published: PublishedIdentity,
+  legalName: string,
+  registeredAs: string | null,
+): number => {
   if (
     published.companyNumber &&
-    number &&
-    published.companyNumber.toLowerCase() === number.toLowerCase()
+    registeredAs &&
+    normalizeCompanyName(published.companyNumber) ===
+      normalizeCompanyName(registeredAs)
   ) {
     return 100;
   }
 
-  if (!published.legalName || !name) {
+  if (!published.legalName) {
     return 0;
   }
 
   const expected = normalizeCompanyName(published.legalName);
-  const actual = normalizeCompanyName(name);
+  const actual = normalizeCompanyName(legalName);
 
   if (expected && expected === actual) {
-    return 90;
+    return 95;
   }
 
   if (
@@ -176,13 +198,13 @@ const scoreRegistryMatch = (
     actual.length >= 5 &&
     (expected.includes(actual) || actual.includes(expected))
   ) {
-    return 60;
+    return 70;
   }
 
   return 0;
 };
 
-async function queryOpenCorporates(
+async function queryGleif(
   published: PublishedIdentity,
 ): Promise<
   Pick<
@@ -193,10 +215,9 @@ async function queryOpenCorporates(
     | "matchedJurisdiction"
     | "matchedStatus"
     | "registryUrl"
+    | "lei"
   >
 > {
-  const apiToken = process.env.OPENCORPORATES_API_TOKEN?.trim();
-
   if (!published.legalName) {
     return {
       registryStatus: "NOT_CHECKED",
@@ -205,26 +226,14 @@ async function queryOpenCorporates(
       matchedJurisdiction: null,
       matchedStatus: null,
       registryUrl: null,
+      lei: null,
     };
   }
 
-  if (!apiToken) {
-    return {
-      registryStatus: "NOT_CONFIGURED",
-      matchedLegalName: null,
-      matchedCompanyNumber: null,
-      matchedJurisdiction: null,
-      matchedStatus: null,
-      registryUrl: null,
-    };
-  }
+  const url = new URL(GLEIF_SEARCH_URL);
 
-  const url = new URL(OPEN_CORPORATES_SEARCH_URL);
-
-  url.searchParams.set("q", published.legalName);
-  url.searchParams.set("order", "score");
-  url.searchParams.set("per_page", "5");
-  url.searchParams.set("api_token", apiToken);
+  url.searchParams.set("filter[entity.legalName]", published.legalName);
+  url.searchParams.set("page[size]", "5");
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -233,7 +242,9 @@ async function queryOpenCorporates(
     const response = await fetch(url, {
       signal: controller.signal,
       headers: {
-        accept: "application/json",
+        accept: "application/vnd.api+json, application/json;q=0.9",
+        "user-agent":
+          "BackstopBot/0.2 (+https://backstop.local; company-identity prototype)",
       },
     });
 
@@ -245,44 +256,59 @@ async function queryOpenCorporates(
         matchedJurisdiction: null,
         matchedStatus: null,
         registryUrl: null,
+        lei: null,
       };
     }
 
     const payload = asRecord((await response.json()) as unknown);
-    const results = payload ? asRecord(payload.results) : null;
-
-    const companyEntries = results?.companies;
-
-    const companies = Array.isArray(companyEntries)
-      ? companyEntries
-      : [];
+    const data = Array.isArray(payload?.data) ? payload.data : [];
 
     let best:
       | {
-          company: Record<string, unknown>;
           score: number;
+          lei: string | null;
+          legalName: string;
+          registeredAs: string | null;
+          jurisdiction: string | null;
+          entityStatus: string | null;
+          registrationStatus: string | null;
         }
       | null = null;
 
-    for (const wrapperValue of companies) {
-      const wrapper = asRecord(wrapperValue);
-      const company = wrapper ? asRecord(wrapper.company) : null;
+    for (const itemValue of data) {
+      const item = asRecord(itemValue);
+      const attributes = asRecord(item?.attributes);
+      const entity = asRecord(attributes?.entity);
+      const registration = asRecord(attributes?.registration);
+      const legalNameRecord = asRecord(entity?.legalName);
 
-      if (!company) {
+      const legalName =
+        readString(legalNameRecord, "name") ??
+        readString(entity, "legalName");
+
+      if (!legalName) {
         continue;
       }
 
-      const score = scoreRegistryMatch(published, company);
+      const registeredAs = readString(entity, "registeredAs");
+      const score = scoreGleifMatch(published, legalName, registeredAs);
 
       if (best === null || score > best.score) {
         best = {
-          company,
           score,
+          lei:
+            readString(attributes, "lei") ??
+            readString(item, "id"),
+          legalName,
+          registeredAs,
+          jurisdiction: readString(entity, "legalJurisdiction"),
+          entityStatus: readString(entity, "status"),
+          registrationStatus: readString(registration, "status"),
         };
       }
     }
 
-    if (!best || best.score < 60) {
+    if (!best || best.score < 70) {
       return {
         registryStatus: "NO_MATCH",
         matchedLegalName: null,
@@ -290,29 +316,25 @@ async function queryOpenCorporates(
         matchedJurisdiction: null,
         matchedStatus: null,
         registryUrl: null,
+        lei: null,
       };
     }
 
+    const matchedStatus =
+      [best.entityStatus, best.registrationStatus]
+        .filter((value): value is string => Boolean(value))
+        .join(" · ") || null;
+
     return {
       registryStatus: "MATCHED",
-      matchedLegalName:
-        typeof best.company.name === "string" ? best.company.name : null,
-      matchedCompanyNumber:
-        typeof best.company.company_number === "string"
-          ? best.company.company_number
-          : null,
-      matchedJurisdiction:
-        typeof best.company.jurisdiction_code === "string"
-          ? best.company.jurisdiction_code.toUpperCase()
-          : null,
-      matchedStatus:
-        typeof best.company.current_status === "string"
-          ? best.company.current_status
-          : null,
-      registryUrl:
-        typeof best.company.opencorporates_url === "string"
-          ? best.company.opencorporates_url
-          : null,
+      matchedLegalName: best.legalName,
+      matchedCompanyNumber: best.registeredAs,
+      matchedJurisdiction: best.jurisdiction,
+      matchedStatus,
+      registryUrl: best.lei
+        ? `https://api.gleif.org/api/v1/lei-records/${encodeURIComponent(best.lei)}`
+        : null,
+      lei: best.lei,
     };
   } catch {
     return {
@@ -322,6 +344,7 @@ async function queryOpenCorporates(
       matchedJurisdiction: null,
       matchedStatus: null,
       registryUrl: null,
+      lei: null,
     };
   } finally {
     clearTimeout(timeout);
@@ -332,14 +355,14 @@ export async function inspectCompanyIdentity(
   input: CompanyIdentityInput,
 ): Promise<RawCompanyIntelligenceDto> {
   const published = selectPublishedIdentity(input);
-  const registry = await queryOpenCorporates(published);
+  const registry = await queryGleif(published);
 
   return {
     publishedLegalName: published.legalName,
     publishedCompanyNumber: published.companyNumber,
     publishedVatNumber: published.vatNumber,
     publishedSourceUrl: published.sourceUrl,
-    registryProvider: "OPEN_CORPORATES",
+    registryProvider: "GLEIF",
     ...registry,
   };
 }

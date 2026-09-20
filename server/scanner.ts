@@ -1280,7 +1280,7 @@ export async function analyzeUrl(
       id: "finding_company",
       category: "Identity",
       headline: "Published legal entity matched an external registry result",
-      detail: `The merchant pages identify ${companyIntelligence.publishedLegalName ?? "a legal entity"}, and OpenCorporates returned a close registry match for ${companyIntelligence.matchedLegalName}.`,
+      detail: `The merchant pages identify ${companyIntelligence.publishedLegalName ?? "a legal entity"}, and GLEIF returned a close LEI record match for ${companyIntelligence.matchedLegalName}.`,
       sourceLabel: "Company identity",
       sourceUrl:
         companyIntelligence.registryUrl ??
@@ -1293,7 +1293,7 @@ export async function analyzeUrl(
       category: "Identity",
       headline: "Published legal entity was not independently matched",
       detail:
-        "Backstop extracted a legal entity from the merchant's own pages, but OpenCorporates did not return a sufficiently close match. Registry coverage and naming differences can cause false negatives, so this is a review signal rather than proof of a problem.",
+        "Backstop extracted a legal entity from the merchant's own pages, but GLEIF did not return a sufficiently close LEI record. Many legitimate businesses do not have an LEI, so this is informational rather than evidence of a problem.",
       sourceLabel: "Company identity",
       sourceUrl: companyIntelligence.publishedSourceUrl,
       severityCode: "INFO",

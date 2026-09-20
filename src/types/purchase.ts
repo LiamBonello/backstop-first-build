@@ -60,11 +60,10 @@ export interface RawCompanyIntelligenceDto {
   publishedCompanyNumber: string | null;
   publishedVatNumber: string | null;
   publishedSourceUrl: string | null;
-  registryProvider: 'OPEN_CORPORATES';
+  registryProvider: 'GLEIF';
   registryStatus:
     | 'MATCHED'
     | 'NO_MATCH'
-    | 'NOT_CONFIGURED'
     | 'NOT_CHECKED'
     | 'UNAVAILABLE';
   matchedLegalName: string | null;
@@ -72,6 +71,7 @@ export interface RawCompanyIntelligenceDto {
   matchedJurisdiction: string | null;
   matchedStatus: string | null;
   registryUrl: string | null;
+  lei: string | null;
 }
 
 export interface RawExternalIntelligenceDto {

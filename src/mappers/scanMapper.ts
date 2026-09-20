@@ -181,8 +181,14 @@ const mapCompanyIntelligence = (
     return {
       publishedIdentityLabel,
       publishedSourceUrl: dto.publishedSourceUrl,
-      registryStatusLabel: 'Registry match',
-      registryDetailLabel: matchParts.join(' · ') || 'Registry match found.',
+      registryStatusLabel: 'GLEIF match',
+      registryDetailLabel:
+        [
+          ...matchParts,
+          dto.lei ? `LEI ${dto.lei}` : null,
+        ]
+          .filter((value): value is string => Boolean(value))
+          .join(' · ') || 'GLEIF LEI record matched.',
       registryUrl: dto.registryUrl,
       tone: 'positive',
     };
@@ -192,23 +198,11 @@ const mapCompanyIntelligence = (
     return {
       publishedIdentityLabel,
       publishedSourceUrl: dto.publishedSourceUrl,
-      registryStatusLabel: 'No exact match',
+      registryStatusLabel: 'No LEI match',
       registryDetailLabel:
-        'OpenCorporates did not return a sufficiently close match for the published legal entity. Coverage and naming differences can cause false negatives.',
+        'GLEIF did not return a sufficiently close LEI record for the published legal entity. Many legitimate businesses do not have an LEI, so this is not a negative trust signal.',
       registryUrl: null,
       tone: 'warning',
-    };
-  }
-
-  if (dto.registryStatus === 'NOT_CONFIGURED') {
-    return {
-      publishedIdentityLabel,
-      publishedSourceUrl: dto.publishedSourceUrl,
-      registryStatusLabel: 'Registry not configured',
-      registryDetailLabel:
-        'A published legal entity was found, but OpenCorporates is not configured for an independent registry comparison.',
-      registryUrl: null,
-      tone: dto.publishedLegalName ? 'neutral' : 'warning',
     };
   }
 
@@ -227,9 +221,9 @@ const mapCompanyIntelligence = (
   return {
     publishedIdentityLabel,
     publishedSourceUrl: dto.publishedSourceUrl,
-    registryStatusLabel: 'Registry unavailable',
+    registryStatusLabel: 'GLEIF unavailable',
     registryDetailLabel:
-      'The configured company-registry provider could not complete this lookup.',
+      'The free GLEIF company-identity lookup could not complete for this scan.',
     registryUrl: null,
     tone: 'warning',
   };
