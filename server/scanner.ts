@@ -14,6 +14,7 @@ import {
 import { inspectCompanyIdentity } from "./companyIntelligence";
 import { inspectDomain } from "./domainIntelligence";
 import { fetchHtml, type FetchedHtml } from "./fetchHtml";
+import { ScannerError } from "./scannerError";
 import { inspectThreatIntelligence } from "./threatIntelligence";
 
 const MAIN_PAGE_MAX_BYTES = 10_000_000;
@@ -781,13 +782,22 @@ export async function analyzeUrl(
   ) {
     const renderedPage = await fetchRenderedHtml(page.finalUrl);
 
-    if (renderedPage) {
+    if (!renderedPage) {
+      if (browserFallbackMode === "force") {
+        throw new ScannerError(
+          "Forced browser rendering could not complete. Check the API terminal for the Chromium error. If the browser executable is missing, run: npx playwright install chromium",
+          503,
+        );
+      }
+    } else {
       const renderedParsed = parseMainPage(renderedPage);
 
-      if (
+      const shouldUseRenderedPage =
+        browserFallbackMode === "force" ||
         mainPageEvidenceScore(renderedParsed) >=
-        mainPageEvidenceScore(parsed)
-      ) {
+          mainPageEvidenceScore(parsed);
+
+      if (shouldUseRenderedPage) {
         page = renderedPage;
         parsed = renderedParsed;
         scanMethod = "BROWSER_RENDERED";
