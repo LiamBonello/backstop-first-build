@@ -2,6 +2,12 @@ import express from 'express';
 import { analyzeUrl } from './scanner';
 import { ScannerError } from './scannerError';
 
+try {
+  process.loadEnvFile('.env');
+} catch {
+  // Local development does not require a .env file.
+}
+
 const app = express();
 
 const port = Number(
