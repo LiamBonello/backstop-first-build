@@ -22,6 +22,10 @@ Backstop is a consumer purchase-intelligence prototype that inspects a public sh
 - Calculated return, warranty and renewal deadlines
 - Local protected-purchase persistence
 - Dynamic protection dashboard
+- Protected-purchase detail view and event timeline
+- Saved scan-evidence snapshots for newly protected purchases
+- Editable protection dates with deadline recalculation
+- Purchase lifecycle states: active, kept, returned and refunded
 
 ## Run locally
 
@@ -85,6 +89,7 @@ Local storage is an MVP persistence layer. The service boundary is intended to m
 - `src/services/protectionService.ts` - protected-purchase persistence and deadline calculations
 - `src/components/ProtectionDrawer.tsx` - protection setup
 - `src/components/Dashboard.tsx` - saved purchase dashboard
+- `src/components/ProtectedPurchaseDetail.tsx` - purchase timeline, evidence and lifecycle actions
 - `src/components/RiskMeter.tsx` - explainable risk breakdown
 
 ## Architecture notes
@@ -98,7 +103,7 @@ The Chromium fallback is conditional and restricted: public HTTP(S) network targ
 1. Authenticated persistence instead of device-only local storage
 2. Notification scheduling for upcoming deadlines
 3. Receipt and email ingestion
-4. Evidence snapshots for disputes and refunds
+4. Dispute/refund workflow using saved evidence
 5. Historical pricing data
 6. Broader company-registry coverage
 7. Browser extension
