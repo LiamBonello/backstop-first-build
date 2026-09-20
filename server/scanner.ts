@@ -42,9 +42,8 @@ interface ParsedMainPage {
   productHeading: string;
   mainText: string;
   productName: string;
-  ogSiteName: string;
-  applicationName: string;
   merchantName: string;
+  merchantIdentityDetected: boolean;
   price: PriceData;
   anchorCount: number;
 }
@@ -683,6 +682,12 @@ function parseMainPage(page: FetchedHtml): ParsedMainPage {
     $('meta[name="application-name"]').attr("content"),
   );
 
+  const merchantIdentityDetected = Boolean(
+    structuredProduct.merchantName ||
+    ogSiteName ||
+    applicationName,
+  );
+
   const merchantName =
     structuredProduct.merchantName ||
     ogSiteName ||
@@ -701,9 +706,8 @@ function parseMainPage(page: FetchedHtml): ParsedMainPage {
     productHeading,
     mainText,
     productName,
-    ogSiteName,
-    applicationName,
     merchantName,
+    merchantIdentityDetected,
     price,
     anchorCount: $("a[href]").length,
   };
@@ -785,9 +789,8 @@ export async function analyzeUrl(
   const {
     $,
     productName,
-    ogSiteName,
-    applicationName,
     merchantName,
+    merchantIdentityDetected,
     price,
     mainText,
   } = parsed;
@@ -1040,7 +1043,7 @@ export async function analyzeUrl(
     evidenceCoverage += 14;
   }
 
-  if (ogSiteName || applicationName || structuredProduct.merchantName) {
+  if (merchantIdentityDetected) {
     evidenceCoverage += 8;
   }
 
@@ -1097,7 +1100,7 @@ export async function analyzeUrl(
     25 +
       (https ? 15 : 0) +
       (hasContactRoute ? 15 : 0) +
-      (ogSiteName || applicationName || structuredProduct.merchantName ? 10 : 0) +
+      (merchantIdentityDetected ? 10 : 0) +
       (domainIntelligence.registrationDateIso !== null ? 10 : 0) +
       (domainIntelligence.registrarName !== null ? 5 : 0) +
       (domainIntelligence.nameserverCount !== null &&
