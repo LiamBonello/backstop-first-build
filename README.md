@@ -186,7 +186,7 @@ Recommended free test stack:
 2. In Render, create a Blueprint from this GitHub repository and allow it to read `render.yaml`.
 3. Set `DATABASE_URL` to the Neon pooled connection string when Render asks for the secret environment variable.
 4. Set `GOOGLE_WEB_RISK_API_KEY` if threat screening should remain enabled.
-5. Render builds the Vite client, applies PostgreSQL migrations in `preDeployCommand`, then starts Express.
+5. Render installs dependencies, builds the Vite client and applies PostgreSQL migrations in the build command, then starts Express. The migration is kept in the build command because Render Free web services do not support pre-deploy commands.
 6. Use `/api/health` on the deployed URL to confirm the API is reachable and inspect the `databaseConnected` flag.
 
 The Render service is configured to bind to the platform-provided `PORT` on `0.0.0.0`, serve the SPA from `dist`, and rate-limit public scan requests to reduce accidental abuse during testing.
