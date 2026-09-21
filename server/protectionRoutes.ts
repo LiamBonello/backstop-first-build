@@ -2,6 +2,10 @@ import {
   Router,
 } from 'express';
 
+import {
+  requireAuthenticatedUser,
+} from './authMiddleware';
+
 import type {
   CreateProtectedPurchaseRequestDto,
   ImportProtectedPurchasesRequestDto,
@@ -52,25 +56,6 @@ const nullableNumber = (
     typeof value === 'number' &&
     Number.isFinite(value)
   );
-
-const readClientId = (
-  value: unknown,
-): string | null => {
-  if (
-    typeof value !== 'string'
-  ) {
-    return null;
-  }
-
-  const trimmed =
-    value.trim();
-
-  return uuidPattern.test(
-    trimmed,
-  )
-    ? trimmed
-    : null;
-};
 
 const parseProtectionTerms = (
   value: unknown,
@@ -253,30 +238,7 @@ const isLifecycleStatus = (
   value === 'refunded';
 
 router.use(
-  (request, response, next) => {
-    const clientId =
-      readClientId(
-        request.header(
-          'x-backstop-client-id',
-        ),
-      );
-
-    if (!clientId) {
-      response
-        .status(400)
-        .json({
-          error:
-            'A valid Backstop client ID is required.',
-        });
-
-      return;
-    }
-
-    response.locals.clientId =
-      clientId;
-
-    next();
-  },
+  requireAuthenticatedUser,
 );
 
 router.get(
@@ -288,7 +250,7 @@ router.get(
     try {
       const records =
         await protectionRepository.list(
-          response.locals.clientId as string,
+          response.locals.userId as string,
         );
 
       response.json({
@@ -304,7 +266,7 @@ router.get(
         .status(503)
         .json({
           error:
-            'Backstop could not reach the local protection database.',
+            'Backstop could not reach the account protection database.',
         });
     }
   },
@@ -335,7 +297,7 @@ router.post(
     try {
       const record =
         await protectionRepository.create(
-          response.locals.clientId as string,
+          response.locals.userId as string,
           input,
         );
 
@@ -395,7 +357,7 @@ router.patch(
     try {
       const record =
         await protectionRepository.updateDates(
-          response.locals.clientId as string,
+          response.locals.userId as string,
           request.params.id,
           input,
         );
@@ -412,7 +374,7 @@ router.patch(
       }
 
       await notificationRepository.invalidatePurchase(
-        response.locals.clientId as string,
+        response.locals.userId as string,
         request.params.id,
       );
 
@@ -479,7 +441,7 @@ router.patch(
     try {
       const record =
         await protectionRepository.setLifecycle(
-          response.locals.clientId as string,
+          response.locals.userId as string,
           request.params.id,
           lifecycleStatus,
         );
@@ -496,7 +458,7 @@ router.patch(
       }
 
       await notificationRepository.invalidatePurchase(
-        response.locals.clientId as string,
+        response.locals.userId as string,
         request.params.id,
       );
 
@@ -543,7 +505,7 @@ router.delete(
     try {
       const removed =
         await protectionRepository.remove(
-          response.locals.clientId as string,
+          response.locals.userId as string,
           request.params.id,
         );
 
@@ -609,7 +571,7 @@ router.post(
 
     try {
       await protectionRepository.importRecords(
-        response.locals.clientId as string,
+        response.locals.userId as string,
         records as ImportProtectedPurchasesRequestDto['records'],
       );
 
@@ -626,7 +588,7 @@ router.post(
         .status(503)
         .json({
           error:
-            'Backstop could not import existing local protection records.',
+            'Backstop could not import existing protection records.',
         });
     }
   },

@@ -20,6 +20,10 @@ import {
 } from './components/AppFooter';
 
 import {
+  AuthDialog,
+} from './components/AuthDialog';
+
+import {
   CursorGlow,
 } from './components/CursorGlow';
 
@@ -58,6 +62,14 @@ import {
 import {
   mapScanResponse,
 } from './mappers/scanMapper';
+
+import {
+  authService,
+} from './services/authService';
+
+import type {
+  BackstopAuthUser,
+} from './services/authService';
 
 import {
   notificationService,
@@ -136,6 +148,30 @@ export default function App() {
     isScanning,
     setIsScanning,
   ] = useState(false);
+
+  const [
+    authUser,
+    setAuthUser,
+  ] = useState<BackstopAuthUser | null>(
+    null,
+  );
+
+  const [
+    authPending,
+    setAuthPending,
+  ] = useState(true);
+
+  const [
+    authDialogOpen,
+    setAuthDialogOpen,
+  ] = useState(false);
+
+  const [
+    pendingProtectionInput,
+    setPendingProtectionInput,
+  ] = useState<ProtectionInput | null>(
+    null,
+  );
 
   const [
     isBootstrapping,
@@ -307,89 +343,118 @@ export default function App() {
       return result.notifications;
     };
 
+  const clearAccountData =
+    () => {
+      setProtectedPurchases(
+        [],
+      );
+
+      setResolutionCases(
+        [],
+      );
+
+      setNotifications(
+        [],
+      );
+
+      setSelectedPurchaseId(
+        null,
+      );
+
+      setSelectedResolutionCaseId(
+        null,
+      );
+    };
+
+  const loadAccountData =
+    async () => {
+      const [
+        purchases,
+        cases,
+        notificationResult,
+      ] =
+        await Promise.all([
+          protectionService.list(),
+          resolutionService.list(),
+          notificationService.list(),
+        ]);
+
+      setProtectedPurchases(
+        purchases,
+      );
+
+      setResolutionCases(
+        cases,
+      );
+
+      setNotifications(
+        notificationResult.notifications,
+      );
+
+      setNotificationLeadDays(
+        notificationResult.preferences.leadDays,
+      );
+    };
+
   useEffect(() => {
     let cancelled =
       false;
 
     const bootstrap =
       async () => {
-        const [
-          purchasesResult,
-          casesResult,
-          notificationsResult,
-        ] =
-          await Promise.allSettled([
-            protectionService.list(),
-            resolutionService.list(),
-            notificationService.list(),
-          ]);
-
-        if (
-          cancelled
-        ) {
-          return;
-        }
-
-        if (
-          purchasesResult.status ===
-          'fulfilled'
-        ) {
-          setProtectedPurchases(
-            purchasesResult.value,
-          );
-        }
-
-        if (
-          casesResult.status ===
-          'fulfilled'
-        ) {
-          setResolutionCases(
-            casesResult.value,
-          );
-        }
-
-        if (
-          notificationsResult.status ===
-          'fulfilled'
-        ) {
-          setNotifications(
-            notificationsResult.value.notifications,
-          );
-
-          setNotificationLeadDays(
-            notificationsResult.value.preferences.leadDays,
-          );
-        }
-
-        const failure =
-          [
-            purchasesResult,
-            casesResult,
-            notificationsResult,
-          ].find(
-            (
-              result,
-            ) =>
-              result.status ===
-              'rejected',
-          );
-
-        if (
-          failure &&
-          failure.status ===
-            'rejected'
-        ) {
-          setAppError(
-            errorMessage(
-              failure.reason,
-              'Backstop could not load all local data.',
-            ),
-          );
-        }
+        setAuthPending(
+          true,
+        );
 
         setIsBootstrapping(
-          false,
+          true,
         );
+
+        try {
+          const user =
+            await authService.getCurrentUser();
+
+          if (
+            cancelled
+          ) {
+            return;
+          }
+
+          setAuthUser(
+            user,
+          );
+
+          if (user) {
+            await loadAccountData();
+          } else {
+            clearAccountData();
+          }
+        } catch (error) {
+          if (
+            !cancelled
+          ) {
+            clearAccountData();
+
+            setAppError(
+              errorMessage(
+                error,
+                'Backstop could not restore your account session.',
+              ),
+            );
+          }
+        } finally {
+          if (
+            !cancelled
+          ) {
+            setAuthPending(
+              false,
+            );
+
+            setIsBootstrapping(
+              false,
+            );
+          }
+        }
       };
 
     void bootstrap();
@@ -401,6 +466,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (!authUser) {
+      return;
+    }
+
     const intervalId =
       window.setInterval(
         () => {
@@ -417,10 +486,13 @@ export default function App() {
       window.clearInterval(
         intervalId,
       );
-  }, []);
+  }, [
+    authUser?.id,
+  ]);
 
   useEffect(() => {
     if (
+      !authUser ||
       browserNotificationPermission !==
         'granted' ||
       !(
@@ -545,9 +617,114 @@ export default function App() {
       }
     }
   }, [
+    authUser,
     browserNotificationPermission,
     notifications,
   ]);
+
+  const handleAuthenticated =
+    (
+      user:
+        BackstopAuthUser,
+    ) => {
+      setAuthUser(
+        user,
+      );
+
+      setAuthDialogOpen(
+        false,
+      );
+
+      setIsBootstrapping(
+        true,
+      );
+
+      void (
+        async () => {
+          try {
+            const pendingInput =
+              pendingProtectionInput;
+
+            if (
+              pendingInput &&
+              scan
+            ) {
+              await protectionService.protect(
+                scan,
+                pendingInput,
+              );
+
+              setPendingProtectionInput(
+                null,
+              );
+
+              setToastOpen(
+                true,
+              );
+            }
+
+            await loadAccountData();
+          } catch (error) {
+            setAppError(
+              errorMessage(
+                error,
+                'Backstop could not load your account data.',
+              ),
+            );
+          } finally {
+            setIsBootstrapping(
+              false,
+            );
+          }
+        }
+      )();
+    };
+
+  const handleSignOut =
+    () => {
+      setAuthPending(
+        true,
+      );
+
+      void authService
+        .signOut()
+        .then(
+          () => {
+            setAuthUser(
+              null,
+            );
+
+            setPendingProtectionInput(
+              null,
+            );
+
+            clearAccountData();
+
+            setView(
+              'home',
+            );
+          },
+        )
+        .catch(
+          (
+            error: unknown,
+          ) => {
+            setAppError(
+              errorMessage(
+                error,
+                'Backstop could not sign you out.',
+              ),
+            );
+          },
+        )
+        .finally(
+          () => {
+            setAuthPending(
+              false,
+            );
+          },
+        );
+    };
 
   const handleScan = async (
     url: string,
@@ -615,6 +792,18 @@ export default function App() {
       ProtectionInput,
   ) => {
     if (!scan) {
+      return;
+    }
+
+    if (!authUser) {
+      setPendingProtectionInput(
+        input,
+      );
+
+      setAuthDialogOpen(
+        true,
+      );
+
       return;
     }
 
@@ -1085,6 +1274,14 @@ export default function App() {
 
   const goDashboard =
     () => {
+      if (!authUser) {
+        setAuthDialogOpen(
+          true,
+        );
+
+        return;
+      }
+
       void Promise.all([
         refreshProtectedPurchases(),
         refreshResolutionCases(),
@@ -1096,7 +1293,7 @@ export default function App() {
           setAppError(
             errorMessage(
               error,
-              'Backstop could not refresh local protection data.',
+              'Backstop could not refresh your protection data.',
             ),
           );
         },
@@ -1158,6 +1355,20 @@ export default function App() {
         onHome={
           goHome
         }
+        authUser={
+          authUser
+        }
+        authPending={
+          authPending
+        }
+        onSignIn={() =>
+          setAuthDialogOpen(
+            true,
+          )
+        }
+        onSignOut={
+          handleSignOut
+        }
         notifications={
           notifications
         }
@@ -1183,7 +1394,7 @@ export default function App() {
 
       {isBootstrapping && (
         <LinearProgress
-          aria-label="Loading local Backstop data"
+          aria-label="Loading Backstop account data"
           sx={{
             position:
               'fixed',
@@ -1344,6 +1555,24 @@ export default function App() {
       </Box>
 
       <AppFooter />
+
+      <AuthDialog
+        open={
+          authDialogOpen
+        }
+        onClose={() => {
+          setAuthDialogOpen(
+            false,
+          );
+
+          setPendingProtectionInput(
+            null,
+          );
+        }}
+        onAuthenticated={
+          handleAuthenticated
+        }
+      />
 
       <Snackbar
         open={

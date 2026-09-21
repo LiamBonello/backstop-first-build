@@ -11,6 +11,10 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: VITE_NEON_AUTH_URL
+        value: "https://ep-cold-morning-b13losv3.neonauth.c-5.eu-central-1.aws.neon.tech/backstop/auth"
+      - key: NEON_AUTH_URL
+        value: "https://ep-cold-morning-b13losv3.neonauth.c-5.eu-central-1.aws.neon.tech/backstop/auth"
       - key: DATABASE_URL
         sync: false
       - key: GOOGLE_WEB_RISK_API_KEY

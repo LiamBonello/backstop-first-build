@@ -1,6 +1,6 @@
 # Backstop
 
-Backstop is a local-first consumer purchase intelligence web app. It inspects a public shopping URL before purchase, preserves the evidence that mattered at the time of purchase, tracks return/warranty/renewal deadlines, reminds the user before those deadlines, and provides a structured resolution case when something goes wrong.
+Backstop is an authenticated consumer purchase intelligence web app. It inspects a public shopping URL before purchase, preserves the evidence that mattered at the time of purchase, tracks return/warranty/renewal deadlines, reminds the user before those deadlines, and provides a structured resolution case when something goes wrong.
 
 ## MVP product loop
 
@@ -63,13 +63,15 @@ Backstop is a local-first consumer purchase intelligence web app. It inspects a 
 - Factual merchant-message draft generated from saved case facts
 - Direct link back to the originating protected purchase and its evidence
 
-## Local-first MVP boundary
+## Authentication and ownership
 
-Backstop currently uses an anonymous browser UUID to namespace records in the local database. This is **not authentication** and is not a security boundary.
+Backstop uses Neon Auth with managed Better Auth for email/password account creation and sign-in.
 
-The UI intentionally identifies this as **Local mode**. The MVP does not pretend accounts exist.
+The browser obtains a signed Neon JWT and attaches it as a Bearer token to protected-purchase, reminder and resolution-case API requests. Express verifies that JWT against Neon's JWKS before using the authenticated user UUID as the data-ownership key. Browser-supplied user IDs are not trusted.
 
-Desktop notifications use the browser Notification API and therefore require Backstop to be open. Background push while the app is completely closed would require a service worker, push subscription infrastructure and a hosted deployment.
+The public scan endpoint remains available before sign-in. Saving protection data, viewing My protection, reminders and resolution cases require an authenticated account.
+
+Desktop notifications use the browser Notification API and therefore require Backstop to be open. Background push while the app is completely closed would require a service worker and push-subscription infrastructure.
 
 Backstop is an evidence and workflow tool. It does not guarantee merchant legitimacy, policy enforceability, refunds, chargebacks or legal outcomes.
 
@@ -153,6 +155,7 @@ Google Web Risk is optional. When no key is configured, Backstop reports threat 
 - `server/domainIntelligence.ts` - RDAP, DNS and TLS evidence
 - `server/threatIntelligence.ts` - Google Web Risk adapter
 - `server/companyIntelligence.ts` - merchant identity and GLEIF lookup
+- `server/authMiddleware.ts` - Neon JWT/JWKS verification and authenticated user boundary
 - `server/protectionRepository.ts` / `server/protectionRoutes.ts` - protected purchase persistence/API
 - `server/notificationRepository.ts` / `server/notificationRoutes.ts` - reminder generation/persistence/API
 - `server/resolutionRepository.ts` / `server/resolutionRoutes.ts` - resolution case persistence/API
@@ -161,7 +164,8 @@ Google Web Risk is optional. When no key is configured, Backstop reports threat 
 ### Client
 
 - `src/App.tsx` - top-level product flow and local data orchestration
-- `src/services/backstopApi.ts` - shared API client and anonymous local client identity
+- `src/services/authService.ts` - Neon Auth session/sign-in/sign-up client
+- `src/services/backstopApi.ts` - authenticated API client with Bearer JWTs
 - `src/services/scanService.ts` - scanner client
 - `src/services/protectionService.ts` - protection client/hydration/legacy migration
 - `src/services/notificationService.ts` - reminder client
@@ -191,16 +195,16 @@ Recommended free test stack:
 
 The Render service is configured to bind to the platform-provided `PORT` on `0.0.0.0`, serve the SPA from `dist`, and rate-limit public scan requests to reduce accidental abuse during testing.
 
-Do not invite real users until authentication/authorization replaces the anonymous browser UUID namespace.
+Protected user data is account-scoped server-side. Before a broader public launch, add production monitoring, abuse controls and the final privacy/terms surfaces.
 
 ## Production work intentionally outside this MVP
 
 These are deployment/productization layers, not missing local MVP screens:
 
-1. Real user accounts and authorization
-2. Hosted PostgreSQL and deployment environment
-3. Service-worker/web-push delivery while the app is closed
-4. Email/receipt ingestion
-5. Historical price datasets
-6. Jurisdiction-specific consumer-rights/legal escalation logic
-7. Browser extension
+1. Service-worker/web-push delivery while the app is closed
+2. Email/receipt ingestion
+3. Historical price datasets
+4. Jurisdiction-specific consumer-rights/legal escalation logic
+5. Browser extension
+6. Production privacy/terms/account-deletion flows
+7. Monitoring, backups and broader abuse controls

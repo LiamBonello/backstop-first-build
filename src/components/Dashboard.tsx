@@ -174,7 +174,7 @@ export function Dashboard({
 
             <Chip
               size="small"
-              label="Local PostgreSQL"
+              label="Account synced"
               sx={{
                 color:
                   'text.secondary',
@@ -210,7 +210,7 @@ export function Dashboard({
                 640,
             }}
           >
-            Exact return, warranty and renewal deadlines persisted in your local PostgreSQL database.
+            Exact return, warranty and renewal deadlines synced to your Backstop account.
           </Typography>
         </Box>
 

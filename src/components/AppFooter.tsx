@@ -82,7 +82,7 @@ export function AppFooter() {
               'nowrap',
           }}
         >
-          Local-first MVP · PostgreSQL-backed
+          Authenticated MVP · Neon-backed
         </Typography>
       </Stack>
     </Box>

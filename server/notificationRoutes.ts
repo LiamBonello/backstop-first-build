@@ -3,6 +3,10 @@ import {
 } from 'express';
 
 import {
+  requireAuthenticatedUser,
+} from './authMiddleware';
+
+import {
   notificationRepository,
 } from './notificationRepository';
 
@@ -12,54 +16,8 @@ const router =
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-const readClientId = (
-  value: unknown,
-): string | null => {
-  if (
-    typeof value !== 'string'
-  ) {
-    return null;
-  }
-
-  const trimmed =
-    value.trim();
-
-  return uuidPattern.test(
-    trimmed,
-  )
-    ? trimmed
-    : null;
-};
-
 router.use(
-  (
-    request,
-    response,
-    next,
-  ) => {
-    const clientId =
-      readClientId(
-        request.header(
-          'x-backstop-client-id',
-        ),
-      );
-
-    if (!clientId) {
-      response
-        .status(400)
-        .json({
-          error:
-            'A valid Backstop client ID is required.',
-        });
-
-      return;
-    }
-
-    response.locals.clientId =
-      clientId;
-
-    next();
-  },
+  requireAuthenticatedUser,
 );
 
 router.get(
@@ -71,7 +29,7 @@ router.get(
     try {
       const result =
         await notificationRepository.list(
-          response.locals.clientId as string,
+          response.locals.userId as string,
         );
 
       response.json(
@@ -124,7 +82,7 @@ router.patch(
     try {
       const preferences =
         await notificationRepository.updatePreferences(
-          response.locals.clientId as string,
+          response.locals.userId as string,
           leadDays,
         );
 
@@ -171,7 +129,7 @@ router.patch(
     try {
       const updated =
         await notificationRepository.markRead(
-          response.locals.clientId as string,
+          response.locals.userId as string,
           request.params.id,
         );
 
@@ -229,7 +187,7 @@ router.patch(
     try {
       const updated =
         await notificationRepository.markDelivered(
-          response.locals.clientId as string,
+          response.locals.userId as string,
           request.params.id,
         );
 
@@ -271,7 +229,7 @@ router.post(
   ) => {
     try {
       await notificationRepository.markAllRead(
-        response.locals.clientId as string,
+        response.locals.userId as string,
       );
 
       response

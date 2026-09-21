@@ -2,6 +2,10 @@ import {
   Router,
 } from 'express';
 
+import {
+  requireAuthenticatedUser,
+} from './authMiddleware';
+
 import type {
   CreateResolutionCaseRequestDto,
   ResolutionCaseStatus,
@@ -40,26 +44,6 @@ const statuses:
     'closed',
   ];
 
-const readClientId = (
-  value: unknown,
-): string | null => {
-  if (
-    typeof value !==
-      'string'
-  ) {
-    return null;
-  }
-
-  const trimmed =
-    value.trim();
-
-  return uuidPattern.test(
-    trimmed,
-  )
-    ? trimmed
-    : null;
-};
-
 const isIssueType = (
   value: unknown,
 ): value is ResolutionIssueType =>
@@ -92,34 +76,7 @@ const nullableAmount = (
   );
 
 router.use(
-  (
-    request,
-    response,
-    next,
-  ) => {
-    const clientId =
-      readClientId(
-        request.header(
-          'x-backstop-client-id',
-        ),
-      );
-
-    if (!clientId) {
-      response
-        .status(400)
-        .json({
-          error:
-            'A valid Backstop client ID is required.',
-        });
-
-      return;
-    }
-
-    response.locals.clientId =
-      clientId;
-
-    next();
-  },
+  requireAuthenticatedUser,
 );
 
 router.get(
@@ -131,7 +88,7 @@ router.get(
     try {
       const cases =
         await resolutionRepository.list(
-          response.locals.clientId as string,
+          response.locals.userId as string,
         );
 
       response.json({
@@ -229,7 +186,7 @@ router.post(
     try {
       const created =
         await resolutionRepository.create(
-          response.locals.clientId as string,
+          response.locals.userId as string,
           {
             purchaseId,
             issueType,
@@ -305,7 +262,7 @@ router.patch(
     try {
       const updated =
         await resolutionRepository.setStatus(
-          response.locals.clientId as string,
+          response.locals.userId as string,
           request.params.id,
           status,
         );
@@ -373,7 +330,7 @@ router.post(
     try {
       const updated =
         await resolutionRepository.addNote(
-          response.locals.clientId as string,
+          response.locals.userId as string,
           request.params.id,
           note.trim(),
         );

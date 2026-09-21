@@ -1,3 +1,7 @@
+import {
+  authService,
+} from './authService';
+
 const apiBaseUrl =
   (
     import.meta.env
@@ -8,36 +12,20 @@ const apiBaseUrl =
     '',
   );
 
-const CLIENT_ID_KEY =
-  'backstop.client-id.v1';
-
-export const getBackstopClientId =
-  (): string => {
-    const existing =
-      window.localStorage.getItem(
-        CLIENT_ID_KEY,
-      );
-
-    if (existing) {
-      return existing;
-    }
-
-    const created =
-      crypto.randomUUID();
-
-    window.localStorage.setItem(
-      CLIENT_ID_KEY,
-      created,
-    );
-
-    return created;
-  };
-
 export const backstopRequestJson =
   async <T>(
     path: string,
     init?: RequestInit,
   ): Promise<T> => {
+    const token =
+      await authService.getAccessToken();
+
+    if (!token) {
+      throw new Error(
+        'Sign in to access your protected purchases.',
+      );
+    }
+
     const headers =
       new Headers(
         init?.headers,
@@ -49,8 +37,8 @@ export const backstopRequestJson =
     );
 
     headers.set(
-      'x-backstop-client-id',
-      getBackstopClientId(),
+      'authorization',
+      `Bearer ${token}`,
     );
 
     const response =
@@ -89,7 +77,8 @@ export const backstopRequestJson =
     }
 
     if (
-      response.status === 204
+      response.status ===
+      204
     ) {
       return undefined as T;
     }

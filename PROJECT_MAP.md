@@ -1,6 +1,6 @@
 # Backstop project map
 
-Backstop is a local-first purchase intelligence MVP with four primary product states:
+Backstop is an authenticated purchase intelligence MVP with four primary product states:
 
 ```text
 Scan -> Protect -> Remind -> Resolve
@@ -68,6 +68,8 @@ Scan -> Protect -> Remind -> Resolve
 - `src/types/purchase.ts`
 - `src/types/notification.ts`
 - `src/types/resolution.ts`
+- `src/services/authService.ts`
+- `server/authMiddleware.ts`
 - `src/services/backstopApi.ts`
 
 API data is mapped before UI components consume presentation fields. Components should not contain raw API-to-UI transformation logic.
@@ -90,6 +92,8 @@ API data is mapped before UI components consume presentation fields. Components 
 - `server/threatIntelligence.ts`
 - `server/companyIntelligence.ts`
 
-## MVP boundary
+## Authentication boundary
 
-The current product is intentionally local-first. The anonymous browser client UUID is namespacing, not authentication. Do not add fake account UX. Real auth, hosted deployment and push infrastructure are separate productionization workstreams.
+Public scans remain available before sign-in. Protected purchases, reminders and resolution cases are account-scoped using Neon Auth JWTs verified by Express against Neon's JWKS. The authenticated Neon user UUID is the repository ownership key.
+
+Hosted deployment and authentication are now part of the MVP. Background web push, broader account-management surfaces and production operations remain separate productization workstreams.

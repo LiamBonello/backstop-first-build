@@ -1,10 +1,13 @@
+import AccountCircleRoundedIcon from '@mui/icons-material/AccountCircleRounded';
 import DashboardRoundedIcon from '@mui/icons-material/DashboardRounded';
-import StorageRoundedIcon from '@mui/icons-material/StorageRounded';
+import LoginRoundedIcon from '@mui/icons-material/LoginRounded';
+import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 
 import {
   Box,
   Button,
   Chip,
+  IconButton,
   Stack,
   Tooltip,
   Typography,
@@ -13,6 +16,10 @@ import {
 import {
   alpha,
 } from '@mui/material/styles';
+
+import type {
+  BackstopAuthUser,
+} from '../services/authService';
 
 import type {
   DeadlineNotification,
@@ -35,6 +42,18 @@ interface TopNavProps {
     () => void;
 
   onHome:
+    () => void;
+
+  authUser:
+    BackstopAuthUser | null;
+
+  authPending:
+    boolean;
+
+  onSignIn:
+    () => void;
+
+  onSignOut:
     () => void;
 
   notifications:
@@ -67,6 +86,10 @@ interface TopNavProps {
 export function TopNav({
   onDashboard,
   onHome,
+  authUser,
+  authPending,
+  onSignIn,
+  onSignOut,
   notifications,
   notificationLeadDays,
   browserNotificationPermission,
@@ -75,6 +98,11 @@ export function TopNav({
   onReadAllNotifications,
   onNotificationLeadDaysChange,
 }: TopNavProps) {
+  const accountLabel =
+    authUser?.name?.trim() ||
+    authUser?.email ||
+    'Account';
+
   return (
     <Box
       component="header"
@@ -212,56 +240,121 @@ export function TopNav({
             </Box>
           </Button>
 
-          <NotificationCenter
-            notifications={
-              notifications
-            }
-            leadDays={
-              notificationLeadDays
-            }
-            browserPermission={
-              browserNotificationPermission
-            }
-            onEnableDesktopNotifications={
-              onEnableDesktopNotifications
-            }
-            onNotificationClick={
-              onNotificationClick
-            }
-            onReadAll={
-              onReadAllNotifications
-            }
-            onLeadDaysChange={
-              onNotificationLeadDaysChange
-            }
-          />
-
-          <Tooltip
-            title="Local-first mode. Purchase, reminder and case data are stored in your PostgreSQL instance."
-          >
-            <Chip
-              size="small"
-              icon={
-                <StorageRoundedIcon />
+          {authUser && (
+            <NotificationCenter
+              notifications={
+                notifications
               }
-              label="Local mode"
+              leadDays={
+                notificationLeadDays
+              }
+              browserPermission={
+                browserNotificationPermission
+              }
+              onEnableDesktopNotifications={
+                onEnableDesktopNotifications
+              }
+              onNotificationClick={
+                onNotificationClick
+              }
+              onReadAll={
+                onReadAllNotifications
+              }
+              onLeadDaysChange={
+                onNotificationLeadDaysChange
+              }
+            />
+          )}
+
+          {authUser ? (
+            <>
+              <Tooltip
+                title={
+                  authUser.email
+                }
+              >
+                <Chip
+                  size="small"
+                  icon={
+                    <AccountCircleRoundedIcon />
+                  }
+                  label={
+                    accountLabel
+                  }
+                  sx={{
+                    maxWidth:
+                      170,
+                    color:
+                      '#A8F4DF',
+                    bgcolor:
+                      alpha(
+                        '#61F4D5',
+                        0.055,
+                      ),
+                    '& .MuiChip-label': {
+                      overflow:
+                        'hidden',
+                      textOverflow:
+                        'ellipsis',
+                    },
+                  }}
+                />
+              </Tooltip>
+
+              <Tooltip
+                title="Sign out"
+              >
+                <IconButton
+                  aria-label="Sign out"
+                  onClick={
+                    onSignOut
+                  }
+                  sx={{
+                    color:
+                      'text.secondary',
+                    border:
+                      `1px solid ${alpha(
+                        '#ffffff',
+                        0.08,
+                      )}`,
+                  }}
+                >
+                  <LogoutRoundedIcon
+                    fontSize="small"
+                  />
+                </IconButton>
+              </Tooltip>
+            </>
+          ) : (
+            <Button
+              variant="outlined"
+              startIcon={
+                <LoginRoundedIcon />
+              }
+              disabled={
+                authPending
+              }
+              onClick={
+                onSignIn
+              }
               sx={{
-                display: {
-                  xs:
-                    'none',
-                  md:
-                    'inline-flex',
-                },
+                borderColor:
+                  alpha(
+                    '#ffffff',
+                    0.1,
+                  ),
                 color:
-                  'text.secondary',
+                  'text.primary',
                 bgcolor:
                   alpha(
                     '#ffffff',
                     0.025,
                   ),
               }}
-            />
-          </Tooltip>
+            >
+              Sign in
+            </Button>
+          )}
         </Stack>
       </Stack>
     </Box>
