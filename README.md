@@ -174,6 +174,25 @@ Google Web Risk is optional. When no key is configured, Backstop reports threat 
 - `src/components/NotificationCenter.tsx` - reminder center
 - `src/components/ResolutionCaseView.tsx` - resolution workspace
 
+## Free hosted test deployment
+
+The repository includes a `render.yaml` Blueprint for a single Render web service. In production, Express serves the built Vite frontend and the `/api` routes from the same origin.
+
+The initial free deployment intentionally sets `BACKSTOP_BROWSER_FALLBACK=0` and `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`. This keeps the Render Free service lighter. Static scanning, PostgreSQL persistence, reminders and resolution cases still work. Chromium fallback can be re-enabled later when the hosting plan is proven capable of supporting it.
+
+Recommended free test stack:
+
+1. Create a Neon project and copy its **pooled** PostgreSQL connection string.
+2. In Render, create a Blueprint from this GitHub repository and allow it to read `render.yaml`.
+3. Set `DATABASE_URL` to the Neon pooled connection string when Render asks for the secret environment variable.
+4. Set `GOOGLE_WEB_RISK_API_KEY` if threat screening should remain enabled.
+5. Render builds the Vite client, applies PostgreSQL migrations in `preDeployCommand`, then starts Express.
+6. Use `/api/health` on the deployed URL to confirm the API is reachable and inspect the `databaseConnected` flag.
+
+The Render service is configured to bind to the platform-provided `PORT` on `0.0.0.0`, serve the SPA from `dist`, and rate-limit public scan requests to reduce accidental abuse during testing.
+
+Do not invite real users until authentication/authorization replaces the anonymous browser UUID namespace.
+
 ## Production work intentionally outside this MVP
 
 These are deployment/productization layers, not missing local MVP screens:

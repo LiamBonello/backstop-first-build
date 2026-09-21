@@ -1,4 +1,7 @@
+import path from 'node:path';
+
 import express from 'express';
+
 import { checkDatabaseConnection } from './db/pool';
 import { notificationRouter } from './notificationRoutes';
 import { protectionRouter } from './protectionRoutes';
@@ -18,11 +21,78 @@ const port = Number(
   process.env.PORT ?? 8787,
 );
 
-app.disable('x-powered-by');
+const isProduction =
+  process.env.NODE_ENV ===
+  'production';
+
+const SCAN_RATE_LIMIT_WINDOW_MS =
+  10 *
+  60 *
+  1000;
+
+const SCAN_RATE_LIMIT_MAX =
+  20;
+
+interface ScanRateLimitEntry {
+  count: number;
+  resetAt: number;
+}
+
+const scanRateLimits =
+  new Map<
+    string,
+    ScanRateLimitEntry
+  >();
+
+if (isProduction) {
+  app.set(
+    'trust proxy',
+    1,
+  );
+}
+
+app.disable(
+  'x-powered-by',
+);
+
+app.use(
+  (
+    _request,
+    response,
+    next,
+  ) => {
+    response.setHeader(
+      'X-Content-Type-Options',
+      'nosniff',
+    );
+
+    response.setHeader(
+      'Referrer-Policy',
+      'strict-origin-when-cross-origin',
+    );
+
+    response.setHeader(
+      'Permissions-Policy',
+      'camera=(), microphone=(), geolocation=()',
+    );
+
+    if (
+      isProduction
+    ) {
+      response.setHeader(
+        'Strict-Transport-Security',
+        'max-age=31536000; includeSubDomains',
+      );
+    }
+
+    next();
+  },
+);
 
 app.use(
   express.json({
-    limit: '512kb',
+    limit:
+      '512kb',
   }),
 );
 
@@ -36,7 +106,8 @@ app.get(
       await checkDatabaseConnection();
 
     response.json({
-      ok: true,
+      ok:
+        true,
       service:
         'backstop-api',
       databaseConnected,
@@ -73,7 +144,9 @@ app.post(
 
     if (!url) {
       response
-        .status(400)
+        .status(
+          400,
+        )
         .json({
           error:
             'A URL is required.',
@@ -82,11 +155,76 @@ app.post(
       return;
     }
 
+    const clientKey =
+      request.ip ??
+      request.socket.remoteAddress ??
+      'unknown';
+
+    const now =
+      Date.now();
+
+    const currentLimit =
+      scanRateLimits.get(
+        clientKey,
+      );
+
+    if (
+      !currentLimit ||
+      currentLimit.resetAt <=
+        now
+    ) {
+      scanRateLimits.set(
+        clientKey,
+        {
+          count:
+            1,
+          resetAt:
+            now +
+            SCAN_RATE_LIMIT_WINDOW_MS,
+        },
+      );
+    } else if (
+      currentLimit.count >=
+      SCAN_RATE_LIMIT_MAX
+    ) {
+      response.setHeader(
+        'Retry-After',
+        Math.max(
+          1,
+          Math.ceil(
+            (
+              currentLimit.resetAt -
+              now
+            ) /
+              1000,
+          ),
+        ).toString(),
+      );
+
+      response
+        .status(
+          429,
+        )
+        .json({
+          error:
+            'Too many scans from this connection. Try again in a few minutes.',
+        });
+
+      return;
+    } else {
+      currentLimit.count +=
+        1;
+    }
+
     try {
       const result =
-        await analyzeUrl(url);
+        await analyzeUrl(
+          url,
+        );
 
-      response.json(result);
+      response.json(
+        result,
+      );
     } catch (error) {
       if (
         error instanceof
@@ -110,7 +248,9 @@ app.post(
       );
 
       response
-        .status(500)
+        .status(
+          500,
+        )
         .json({
           error:
             'Backstop hit an unexpected scanner error.',
@@ -119,11 +259,75 @@ app.post(
   },
 );
 
+app.use(
+  '/api',
+  (
+    _request,
+    response,
+  ) => {
+    response
+      .status(
+        404,
+      )
+      .json({
+        error:
+          'Backstop API route not found.',
+      });
+  },
+);
+
+if (
+  isProduction
+) {
+  const distDirectory =
+    path.resolve(
+      process.cwd(),
+      'dist',
+    );
+
+  app.use(
+    express.static(
+      distDirectory,
+      {
+        index:
+          false,
+        maxAge:
+          '1h',
+      },
+    ),
+  );
+
+  app.use(
+    (
+      request,
+      response,
+      next,
+    ) => {
+      if (
+        request.method !==
+        'GET'
+      ) {
+        next();
+
+        return;
+      }
+
+      response.sendFile(
+        path.join(
+          distDirectory,
+          'index.html',
+        ),
+      );
+    },
+  );
+}
+
 app.listen(
   port,
+  '0.0.0.0',
   () => {
     console.log(
-      `Backstop scanner listening on http://localhost:${port}`,
+      `Backstop listening on port ${port}`,
     );
   },
 );

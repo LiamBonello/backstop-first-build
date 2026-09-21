@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: backstop
+    runtime: node
+    plan: free
+    buildCommand: npm ci --include=dev && npm run build
+    preDeployCommand: npm run db:migrate
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: GOOGLE_WEB_RISK_API_KEY
+        sync: false
+      - key: BACKSTOP_BROWSER_FALLBACK
+        value: "0"
+      - key: PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD
+        value: "1"
