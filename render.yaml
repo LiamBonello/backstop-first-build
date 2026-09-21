@@ -4,8 +4,7 @@ services:
     runtime: node
     region: frankfurt
     plan: free
-    buildCommand: npm ci --include=dev && npm run build
-    preDeployCommand: npm run db:migrate
+    buildCommand: npm ci --include=dev && npm run build && npm run db:migrate
     startCommand: npm start
     healthCheckPath: /api/health
     autoDeployTrigger: commit
