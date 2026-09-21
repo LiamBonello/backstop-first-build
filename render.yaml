@@ -2,6 +2,7 @@ services:
   - type: web
     name: backstop
     runtime: node
+    region: frankfurt
     plan: free
     buildCommand: npm ci --include=dev && npm run build
     preDeployCommand: npm run db:migrate
