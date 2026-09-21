@@ -7,6 +7,10 @@ import {
   jwtVerify,
 } from 'jose';
 
+import {
+  accountRepository,
+} from './accountRepository';
+
 const uuidPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -128,6 +132,52 @@ export const requireAuthenticatedUser:
 
         return;
       }
+
+      let activeUser =
+        false;
+
+      try {
+        activeUser =
+          await accountRepository.userExists(
+            userId,
+          );
+      } catch (error) {
+        console.error(
+          JSON.stringify({
+            type:
+              'auth_user_lookup_error',
+            message:
+              error instanceof Error
+                ? error.message
+                : 'Unknown auth user lookup error',
+          }),
+        );
+
+        response
+          .status(503)
+          .json({
+            error:
+              'Backstop could not verify your account right now.',
+          });
+
+        return;
+      }
+
+      if (!activeUser) {
+        response
+          .status(401)
+          .json({
+            error:
+              'Your Backstop account is no longer active.',
+          });
+
+        return;
+      }
+
+      response.setHeader(
+        'Cache-Control',
+        'no-store',
+      );
 
       response.locals.userId =
         userId;

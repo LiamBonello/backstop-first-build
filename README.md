@@ -75,6 +75,21 @@ Desktop notifications use the browser Notification API and therefore require Bac
 
 Backstop is an evidence and workflow tool. It does not guarantee merchant legitimacy, policy enforceability, refunds, chargebacks or legal outcomes.
 
+## Production hardening
+
+The hosted MVP includes a first production-hardening pass:
+
+- Account data export from Account settings
+- Permanent account deletion that removes Backstop records and the Neon Auth identity in one transaction
+- Active-user verification on every protected API request, so deleted or banned accounts cannot continue using an old signed JWT
+- Fixed-window request throttling for public scans and authenticated API traffic
+- Minimal structured API request logs with a generated request ID, method, path, status and duration
+- Security headers including CSP, HSTS in production, frame blocking, MIME sniffing protection and a restrictive permissions policy
+- A readiness-aware `/api/health` endpoint that returns HTTP 503 when PostgreSQL or auth configuration is unavailable
+- An in-product Privacy & data notice describing the current MVP implementation
+
+The in-memory rate limiter is appropriate for the current single Render instance. If Backstop scales to multiple application instances, move rate-limit state to a shared store.
+
 ## Run locally
 
 Install dependencies:
@@ -206,5 +221,6 @@ These are deployment/productization layers, not missing local MVP screens:
 3. Historical price datasets
 4. Jurisdiction-specific consumer-rights/legal escalation logic
 5. Browser extension
-6. Production privacy/terms/account-deletion flows
-7. Monitoring, backups and broader abuse controls
+6. Final business privacy notice, terms and controller/contact details
+7. External uptime/error alerting, retention policy and backup/restore runbook
+8. Shared rate-limit storage if the API scales beyond one instance

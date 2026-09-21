@@ -1,5 +1,6 @@
 import {
   Box,
+  Button,
   Stack,
   Typography,
 } from '@mui/material';
@@ -8,7 +9,14 @@ import {
   alpha,
 } from '@mui/material/styles';
 
-export function AppFooter() {
+interface AppFooterProps {
+  onPrivacy:
+    () => void;
+}
+
+export function AppFooter({
+  onPrivacy,
+}: AppFooterProps) {
   return (
     <Box
       component="footer"
@@ -73,17 +81,43 @@ export function AppFooter() {
           Backstop analyzes public commerce signals and keeps purchase evidence organized. It does not guarantee merchant legitimacy, policy enforceability or a particular dispute outcome.
         </Typography>
 
-        <Typography
-          variant="caption"
+        <Stack
+          direction="row"
+          spacing={
+            1
+          }
           sx={{
-            color:
-              'text.secondary',
-            whiteSpace:
-              'nowrap',
+            alignItems:
+              'center',
           }}
         >
-          Authenticated MVP · Neon-backed
-        </Typography>
+          <Button
+            size="small"
+            onClick={
+              onPrivacy
+            }
+            sx={{
+              color:
+                'text.secondary',
+              minWidth:
+                0,
+            }}
+          >
+            Privacy & data
+          </Button>
+
+          <Typography
+            variant="caption"
+            sx={{
+              color:
+                'text.secondary',
+              whiteSpace:
+                'nowrap',
+            }}
+          >
+            Authenticated MVP · Neon-backed
+          </Typography>
+        </Stack>
       </Stack>
     </Box>
   );

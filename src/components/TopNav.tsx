@@ -56,6 +56,9 @@ interface TopNavProps {
   onSignOut:
     () => void;
 
+  onAccount:
+    () => void;
+
   notifications:
     DeadlineNotification[];
 
@@ -90,6 +93,7 @@ export function TopNav({
   authPending,
   onSignIn,
   onSignOut,
+  onAccount,
   notifications,
   notificationLeadDays,
   browserNotificationPermission,
@@ -270,10 +274,14 @@ export function TopNav({
             <>
               <Tooltip
                 title={
-                  authUser.email
+                  `Account settings · ${authUser.email}`
                 }
               >
                 <Chip
+                  clickable
+                  onClick={
+                    onAccount
+                  }
                   size="small"
                   icon={
                     <AccountCircleRoundedIcon />

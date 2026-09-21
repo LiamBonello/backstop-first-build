@@ -2,47 +2,114 @@ import path from 'node:path';
 
 import express from 'express';
 
-import { checkDatabaseConnection } from './db/pool';
-import { notificationRouter } from './notificationRoutes';
-import { protectionRouter } from './protectionRoutes';
-import { resolutionRouter } from './resolutionRoutes';
-import { analyzeUrl } from './scanner';
-import { ScannerError } from './scannerError';
+import {
+  accountRouter,
+} from './accountRoutes';
+
+import {
+  checkDatabaseConnection,
+} from './db/pool';
+
+import {
+  notificationRouter,
+} from './notificationRoutes';
+
+import {
+  protectionRouter,
+} from './protectionRoutes';
+
+import {
+  createRateLimiter,
+} from './rateLimit';
+
+import {
+  requestLoggingMiddleware,
+} from './requestLogging';
+
+import {
+  resolutionRouter,
+} from './resolutionRoutes';
+
+import {
+  analyzeUrl,
+} from './scanner';
+
+import {
+  ScannerError,
+} from './scannerError';
 
 try {
-  process.loadEnvFile('.env');
+  process.loadEnvFile(
+    '.env',
+  );
 } catch {
   // Local development does not require a .env file.
 }
 
-const app = express();
+const app =
+  express();
 
-const port = Number(
-  process.env.PORT ?? 8787,
-);
+const port =
+  Number(
+    process.env.PORT ??
+      8787,
+  );
 
 const isProduction =
   process.env.NODE_ENV ===
   'production';
 
-const SCAN_RATE_LIMIT_WINDOW_MS =
-  10 *
-  60 *
-  1000;
+const authUrl =
+  (
+    process.env
+      .NEON_AUTH_URL ??
+    process.env
+      .VITE_NEON_AUTH_URL ??
+    ''
+  ).trim();
 
-const SCAN_RATE_LIMIT_MAX =
-  20;
+const authOrigin =
+  (() => {
+    if (!authUrl) {
+      return null;
+    }
 
-interface ScanRateLimitEntry {
-  count: number;
-  resetAt: number;
-}
+    try {
+      return new URL(
+        authUrl,
+      ).origin;
+    } catch {
+      return null;
+    }
+  })();
 
-const scanRateLimits =
-  new Map<
-    string,
-    ScanRateLimitEntry
-  >();
+const scanRateLimiter =
+  createRateLimiter({
+    windowMs:
+      10 *
+      60 *
+      1000,
+    max:
+      20,
+    keyPrefix:
+      'scan',
+    message:
+      'Too many scans from this connection. Try again in a few minutes.',
+  });
+
+const protectedApiRateLimiter =
+  createRateLimiter({
+    windowMs:
+      5 *
+      60 *
+      1000,
+    max:
+      300,
+    keyPrefix:
+      'protected-api',
+    message:
+      'Too many Backstop requests from this connection. Try again shortly.',
+  });
 
 if (isProduction) {
   app.set(
@@ -67,6 +134,11 @@ app.use(
     );
 
     response.setHeader(
+      'X-Frame-Options',
+      'DENY',
+    );
+
+    response.setHeader(
       'Referrer-Policy',
       'strict-origin-when-cross-origin',
     );
@@ -74,6 +146,29 @@ app.use(
     response.setHeader(
       'Permissions-Policy',
       'camera=(), microphone=(), geolocation=()',
+    );
+
+    response.setHeader(
+      'Cross-Origin-Opener-Policy',
+      'same-origin',
+    );
+
+    response.setHeader(
+      'Content-Security-Policy',
+      [
+        "default-src 'self'",
+        "script-src 'self'",
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src 'self' https://fonts.gstatic.com data:",
+        "img-src 'self' data: https:",
+        `connect-src 'self'${authOrigin ? ` ${authOrigin}` : ''}`,
+        "object-src 'none'",
+        "base-uri 'self'",
+        "frame-ancestors 'none'",
+        "form-action 'self'",
+      ].join(
+        '; ',
+      ),
     );
 
     if (
@@ -87,6 +182,11 @@ app.use(
 
     next();
   },
+);
+
+app.use(
+  '/api',
+  requestLoggingMiddleware,
 );
 
 app.use(
@@ -105,33 +205,70 @@ app.get(
     const databaseConnected =
       await checkDatabaseConnection();
 
-    response.json({
-      ok:
-        true,
-      service:
-        'backstop-api',
-      databaseConnected,
-    });
+    const authConfigured =
+      Boolean(
+        authOrigin,
+      );
+
+    const ok =
+      databaseConnected &&
+      authConfigured;
+
+    response
+      .status(
+        ok
+          ? 200
+          : 503,
+      )
+      .json({
+        ok,
+        service:
+          'backstop-api',
+        databaseConnected,
+        authConfigured,
+        uptimeSeconds:
+          Math.round(
+            process.uptime(),
+          ),
+        commit:
+          process.env
+            .RENDER_GIT_COMMIT
+            ?.slice(
+              0,
+              12,
+            ) ??
+          null,
+      });
   },
 );
 
 app.use(
   '/api/protection',
+  protectedApiRateLimiter,
   protectionRouter,
 );
 
 app.use(
   '/api/notifications',
+  protectedApiRateLimiter,
   notificationRouter,
 );
 
 app.use(
   '/api/resolution-cases',
+  protectedApiRateLimiter,
   resolutionRouter,
+);
+
+app.use(
+  '/api/account',
+  protectedApiRateLimiter,
+  accountRouter,
 );
 
 app.post(
   '/api/scan',
+  scanRateLimiter,
   async (
     request,
     response,
@@ -153,67 +290,6 @@ app.post(
         });
 
       return;
-    }
-
-    const clientKey =
-      request.ip ??
-      request.socket.remoteAddress ??
-      'unknown';
-
-    const now =
-      Date.now();
-
-    const currentLimit =
-      scanRateLimits.get(
-        clientKey,
-      );
-
-    if (
-      !currentLimit ||
-      currentLimit.resetAt <=
-        now
-    ) {
-      scanRateLimits.set(
-        clientKey,
-        {
-          count:
-            1,
-          resetAt:
-            now +
-            SCAN_RATE_LIMIT_WINDOW_MS,
-        },
-      );
-    } else if (
-      currentLimit.count >=
-      SCAN_RATE_LIMIT_MAX
-    ) {
-      response.setHeader(
-        'Retry-After',
-        Math.max(
-          1,
-          Math.ceil(
-            (
-              currentLimit.resetAt -
-              now
-            ) /
-              1000,
-          ),
-        ).toString(),
-      );
-
-      response
-        .status(
-          429,
-        )
-        .json({
-          error:
-            'Too many scans from this connection. Try again in a few minutes.',
-        });
-
-      return;
-    } else {
-      currentLimit.count +=
-        1;
     }
 
     try {
@@ -305,12 +381,17 @@ if (
     ) => {
       if (
         request.method !==
-        'GET'
+          'GET'
       ) {
         next();
 
         return;
       }
+
+      response.setHeader(
+        'Cache-Control',
+        'no-cache',
+      );
 
       response.sendFile(
         path.join(
@@ -327,7 +408,16 @@ app.listen(
   '0.0.0.0',
   () => {
     console.log(
-      `Backstop listening on port ${port}`,
+      JSON.stringify({
+        type:
+          'service_start',
+        service:
+          'backstop-api',
+        port,
+        environment:
+          process.env.NODE_ENV ??
+          'development',
+      }),
     );
   },
 );

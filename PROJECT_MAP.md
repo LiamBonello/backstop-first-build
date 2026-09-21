@@ -18,7 +18,14 @@ Scan -> Protect -> Remind -> Resolve
   - Home navigation.
   - My protection entry.
   - Notification center.
-  - Explicit Local mode indicator.
+  - Authenticated account entry and sign-out.
+
+- `src/components/AccountDialog.tsx`
+  - Account data export.
+  - Permanent account deletion.
+
+- `src/components/PrivacyDialog.tsx`
+  - In-product privacy/data-use notice.
 
 - `src/components/AppFooter.tsx`
   - Product boundary/disclaimer copy.
@@ -69,7 +76,10 @@ Scan -> Protect -> Remind -> Resolve
 - `src/types/notification.ts`
 - `src/types/resolution.ts`
 - `src/services/authService.ts`
+- `src/services/accountService.ts`
 - `server/authMiddleware.ts`
+- `server/accountRepository.ts`
+- `server/accountRoutes.ts`
 - `src/services/backstopApi.ts`
 
 API data is mapped before UI components consume presentation fields. Components should not contain raw API-to-UI transformation logic.

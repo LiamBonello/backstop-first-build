@@ -12,6 +12,10 @@ import {
 } from 'react';
 
 import {
+  AccountDialog,
+} from './components/AccountDialog';
+
+import {
   AmbientBackground,
 } from './components/AmbientBackground';
 
@@ -38,6 +42,10 @@ import {
 import type {
   BrowserNotificationPermission,
 } from './components/NotificationCenter';
+
+import {
+  PrivacyDialog,
+} from './components/PrivacyDialog';
 
 import {
   ProtectedPurchaseDetail,
@@ -164,6 +172,16 @@ export default function App() {
   const [
     authDialogOpen,
     setAuthDialogOpen,
+  ] = useState(false);
+
+  const [
+    accountDialogOpen,
+    setAccountDialogOpen,
+  ] = useState(false);
+
+  const [
+    privacyDialogOpen,
+    setPrivacyDialogOpen,
   ] = useState(false);
 
   const [
@@ -700,6 +718,10 @@ export default function App() {
 
             clearAccountData();
 
+            setAccountDialogOpen(
+              false,
+            );
+
             setView(
               'home',
             );
@@ -724,6 +746,38 @@ export default function App() {
             );
           },
         );
+    };
+
+  const handleAccountDeleted =
+    () => {
+      setAuthUser(
+        null,
+      );
+
+      setAuthPending(
+        false,
+      );
+
+      setPendingProtectionInput(
+        null,
+      );
+
+      clearAccountData();
+
+      setAccountDialogOpen(
+        false,
+      );
+
+      setView(
+        'home',
+      );
+
+      window.scrollTo({
+        top:
+          0,
+        behavior:
+          'smooth',
+      });
     };
 
   const handleScan = async (
@@ -1369,6 +1423,11 @@ export default function App() {
         onSignOut={
           handleSignOut
         }
+        onAccount={() =>
+          setAccountDialogOpen(
+            true,
+          )
+        }
         notifications={
           notifications
         }
@@ -1554,7 +1613,43 @@ export default function App() {
         )}
       </Box>
 
-      <AppFooter />
+      <AppFooter
+        onPrivacy={() =>
+          setPrivacyDialogOpen(
+            true,
+          )
+        }
+      />
+
+      {authUser && (
+        <AccountDialog
+          open={
+            accountDialogOpen
+          }
+          user={
+            authUser
+          }
+          onClose={() =>
+            setAccountDialogOpen(
+              false,
+            )
+          }
+          onDeleted={
+            handleAccountDeleted
+          }
+        />
+      )}
+
+      <PrivacyDialog
+        open={
+          privacyDialogOpen
+        }
+        onClose={() =>
+          setPrivacyDialogOpen(
+            false,
+          )
+        }
+      />
 
       <AuthDialog
         open={
